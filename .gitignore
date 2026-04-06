@@ -1,0 +1,11 @@
+node_modules/
+.wwebjs_auth/
+.wwebjs_cache/
+credentials/google-token.json
+credentials/google-oauth.json
+.env
+data/processed-events.json
+data/config.json
+data/excel-group-map.json
+.DS_Store
+*.command

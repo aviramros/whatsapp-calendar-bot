@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gadash</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --teal: #3DBDB4;
+      --teal-light: #e8f8f7;
+      --teal-dark: #2ea39b;
+      --sidebar-w: 190px;
+      --sidebar-w-collapsed: 0px;
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #1a1a2e;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: #fff;
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: width .25s ease;
+      overflow: hidden;
+      position: relative;
+    }
+    #sidebar.collapsed { width: 0; border-left: none; }
+
+    .sidebar-logo {
+      padding: 22px 18px 16px;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--teal);
+      letter-spacing: -0.5px;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sidebar-logo span { color: #f59e0b; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 18px;
+      cursor: pointer;
+      font-size: .93rem;
+      font-weight: 500;
+      color: var(--muted);
+      border-radius: 8px;
+      margin: 2px 8px;
+      white-space: nowrap;
+      transition: background .15s, color .15s;
+      user-select: none;
+    }
+    .nav-item:hover { background: #f9fafb; color: var(--text); }
+    .nav-item.active { background: var(--teal-light); color: var(--teal); font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; opacity: .7; }
+    .nav-item.active svg { opacity: 1; }
+
+    /* ── Sidebar toggle ── */
+    #sidebar-toggle {
+      position: fixed;
+      top: 18px;
+      right: calc(var(--sidebar-w) - 13px);
+      z-index: 100;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: #fff;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+      transition: right .25s ease;
+      color: var(--muted);
+      font-size: .85rem;
+    }
+    #sidebar.collapsed ~ #sidebar-toggle,
+    body.collapsed #sidebar-toggle { right: -13px; }
+
+    /* ── Main ── */
+    #main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Pages ── */
+    .page { display: none; padding: 24px; max-width: 1100px; }
+    .page.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      margin-bottom: 16px;
+      border: 1px solid #f0f0f0;
+    }
+    .card-title {
+      font-size: .92rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Grid ── */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+
+    /* ── Status rows ── */
+    .status-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid #f5f5f5;
+      font-size: .9rem;
+    }
+    .status-row:last-child { border-bottom: none; }
+    .dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      flex-shrink: 0; background: #d1d5db;
+      transition: background .3s;
+    }
+    .dot.green  { background: #22c55e; box-shadow: 0 0 0 3px #dcfce7; }
+    .dot.red    { background: #ef4444; box-shadow: 0 0 0 3px #fee2e2; }
+    .dot.yellow { background: #f59e0b; box-shadow: 0 0 0 3px #fef3c7; }
+
+    /* ── QR ── */
+    #qr-section { text-align: center; padding: 12px 0; }
+    #qr-section img { width: 160px; height: 160px; border-radius: 10px; border: 1px solid var(--border); }
+    #qr-section p { font-size: .82rem; color: var(--muted); margin-top: 8px; }
+    #qr-section.hidden { display: none; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 9px 18px; border: none; border-radius: 8px;
+      cursor: pointer; font-size: .9rem; font-weight: 600;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-teal  { background: var(--teal); color: #fff; }
+    .btn-teal:hover:not(:disabled) { background: var(--teal-dark); }
+    .btn-blue  { background: #3b82f6; color: #fff; }
+    .btn-blue:hover:not(:disabled)  { background: #2563eb; }
+    .btn-red   { background: #ef4444; color: #fff; }
+    .btn-red:hover:not(:disabled)   { background: #dc2626; }
+    .btn-gray  { background: #f3f4f6; color: #374151; border: 1px solid var(--border); }
+    .btn-gray:hover:not(:disabled)  { background: #e5e7eb; }
+    /* legacy alias */
+    .btn-green { background: var(--teal); color: #fff; }
+    .btn-green:hover:not(:disabled) { background: var(--teal-dark); }
+
+    #sync-btn { width: 100%; padding: 13px; font-size: 1rem; border-radius: 10px; }
+
+    /* ── Result box ── */
+    #result-box { margin-top: 10px; background: #f9fafb; border-radius: 8px; padding: 10px 14px; font-size: .85rem; display: none; border: 1px solid var(--border); }
+    .created { color: #15803d; } .skipped-text { color: #9ca3af; } .errors { color: #dc2626; }
+    #last-run { font-size: .78rem; color: var(--muted); margin-top: 8px; text-align: center; }
+
+    /* ── Log ── */
+    #log-panel {
+      font-family: 'Menlo','SF Mono','Consolas',monospace;
+      font-size: .77rem; direction: ltr; text-align: left;
+      background: #0f1117; color: #c9d1d9;
+      border-radius: 10px; padding: 12px 14px;
+      height: 260px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-all;
+      line-height: 1.55;
+    }
+    #log-panel .ts   { color: #484f58; }
+    #log-panel .sync { color: #3fb950; }
+    #log-panel .err  { color: #f85149; }
+    #log-panel .wa   { color: #58a6ff; }
+
+    /* ── Calendar ── */
+    .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+    .cal-header h2 { font-size: 1rem; font-weight: 700; }
+    .cal-nav { display: flex; gap: 6px; }
+
+    /* View toggle */
+    .cal-view-toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .cal-view-btn { padding: 6px 14px; font-size: .82rem; font-weight: 600; cursor: pointer; background: #fff; border: none; color: var(--muted); transition: background .15s, color .15s; }
+    .cal-view-btn.active { background: var(--teal); color: #fff; }
+    .cal-view-btn:hover:not(.active) { background: #f3f4f6; }
+
+    /* Monthly */
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    .cal-day-name { text-align: center; font-size: .72rem; font-weight: 600; color: var(--muted); padding: 6px 0; }
+    .cal-cell { min-height: 70px; background: #fafafa; border-radius: 8px; padding: 5px 6px; font-size: .77rem; border: 1px solid #f0f0f0; }
+    .cal-cell.today { background: #f0fdfb; border-color: var(--teal); }
+    .cal-cell.other-month { opacity: .3; }
+    .cal-num { font-weight: 700; color: #374151; margin-bottom: 3px; font-size: .8rem; }
+    .cal-event { background: #dcfce7; color: #15803d; border-radius: 4px; padding: 1px 5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .7rem; }
+    .cal-event.השקיה   { background: #dbeafe; color: #1d4ed8; }
+    .cal-event.ריסוסים { background: #fef9c3; color: #854d0e; }
+
+    /* Weekly */
+    .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .week-col { background: #fafafa; border-radius: 10px; border: 1px solid #f0f0f0; overflow: hidden; }
+    .week-col.today { border-color: var(--teal); }
+    .week-col-header { padding: 8px 6px 6px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+    .week-col-header .wday { font-size: .72rem; font-weight: 600; color: var(--muted); }
+    .week-col-header .wdate { font-size: 1.1rem; font-weight: 700; color: #374151; line-height: 1.2; }
+    .week-col.today .week-col-header .wdate { color: var(--teal); }
+    .week-col-body { padding: 6px 5px; min-height: 120px; }
+    .week-event { background: #dcfce7; color: #15803d; border-radius: 5px; padding: 4px 7px; margin-bottom: 4px; font-size: .78rem; font-weight: 500; line-height: 1.3; }
+    .week-event.השקיה   { background: #dbeafe; color: #1d4ed8; }
+    .week-event.ריסוסים { background: #fef9c3; color: #854d0e; }
+    .week-event.עבודות  { background: #fce7f3; color: #9d174d; }
+    .week-event.דישונים { background: #ede9fe; color: #5b21b6; }
+    .week-empty { font-size: .75rem; color: #d1d5db; text-align: center; padding-top: 10px; }
+
+    /* Daily */
+    .day-view { display: flex; flex-direction: column; gap: 10px; }
+    .day-date-title { font-size: 1.1rem; font-weight: 700; color: #374151; margin-bottom: 4px; }
+    .day-event { display: flex; align-items: flex-start; gap: 10px; background: #fafafa; border-radius: 10px; padding: 12px 14px; border: 1px solid #f0f0f0; }
+    .day-event-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; background: #22c55e; }
+    .day-event-title { font-size: .93rem; font-weight: 600; color: #1a1a2e; }
+    .day-event-cal { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+    .day-no-events { text-align: center; color: var(--muted); font-size: .9rem; padding: 40px 0; }
+
+    /* ── Toggle switch ── */
+    .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #d1d5db; border-radius: 24px; transition: .3s; }
+    .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+    input:checked + .toggle-slider { background: var(--teal); }
+    input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+    /* ── Settings ── */
+    .settings-section-title {
+      font-size: .82rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .06em;
+      margin: 20px 0 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-group { margin-bottom: 16px; }
+    .settings-group label { display: block; font-size: .88rem; font-weight: 600; color: #4b5563; margin-bottom: 5px; }
+    .settings-group input[type=number],
+    .settings-group input[type=text],
+    .settings-group input[type=time] {
+      width: 100%; padding: 9px 12px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: .93rem; outline: none;
+      transition: border .2s, box-shadow .2s;
+    }
+    .settings-group input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px #d0f5f3; }
+    .groups-list { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+    .group-tag {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--teal-light); color: var(--teal-dark);
+      border-radius: 20px; padding: 4px 12px; font-size: .86rem; font-weight: 500;
+    }
+    .group-tag button { background: none; border: none; cursor: pointer; color: var(--teal-dark); font-size: .9rem; line-height: 1; padding: 0; opacity: .7; }
+    .group-tag button:hover { opacity: 1; }
+    .add-group-row { display: flex; gap: 8px; }
+    .add-group-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: .9rem; outline: none; }
+    .add-group-row input:focus { border-color: var(--teal); }
+    .save-feedback { font-size: .82rem; color: #16a34a; margin-top: 8px; display: none; }
+
+    /* ── Excel tab ── */
+    .excel-table { width: 100%; border-collapse: collapse; font-size: .87rem; margin-top: 10px; }
+    .excel-table th { background: #f9fafb; padding: 9px 10px; font-weight: 600; color: #6b7280; border-bottom: 2px solid var(--border); text-align: right; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+    .excel-table td { padding: 8px 10px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
+    .excel-table tr:last-child td { border-bottom: none; }
+    .excel-table tr:hover td { background: #fafef9; }
+    .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 12px; font-size: .77rem; font-weight: 600; }
+    .chip-send  { background: #dcfce7; color: #15803d; }
+    .chip-skip  { background: #f3f4f6; color: #6b7280; }
+    .resend-btn {
+      margin-right: 6px;
+      padding: 2px 8px;
+      font-size: .75rem;
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      color: var(--primary);
+      background: transparent;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .resend-btn:hover { background: var(--primary); color: #fff; }
+    .resend-btn:disabled { opacity: .4; cursor: default; }
+    .chip-sending { background: #fef3c7; color: #92400e; }
+    .chip-resent  { background: #d1fae5; color: #065f46; }
+    .chip-nomap { background: #fef3c7; color: #92400e; }
+    .group-map-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .group-map-table td { padding: 7px 8px; }
+    .group-map-table input { width: 200px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: .9rem; }
+    .excel-results { margin-top: 10px; padding: 12px 16px; background: #f9fafb; border-radius: 10px; font-size: .87rem; display: none; border: 1px solid var(--border); }
+
+    /* ── Upload area ── */
+    .upload-area {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 24px 20px; cursor: pointer;
+      color: var(--muted); font-size: .9rem; transition: border .2s, background .2s;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; text-align: center;
+    }
+    .upload-area:hover, .upload-area.dragover { border-color: var(--teal); background: var(--teal-light); color: var(--teal-dark); }
+    .upload-area svg { opacity: .5; flex-shrink: 0; }
+
+    /* ── Google connect button ── */
+    #gc-connect-btn {
+      display: none; margin-right: auto;
+      background: #4285F4; color: white;
+      border: none; border-radius: 7px;
+      padding: 5px 12px; font-size: .8rem;
+      cursor: pointer; font-weight: 500;
+    }
+
+    /* ── Sticky sidebar ── */
+    #sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    /* ── Toast ── */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: .88rem;
+      font-weight: 500;
+      color: #fff;
+      min-width: 220px;
+      max-width: 340px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+      pointer-events: all;
+      animation: toastIn .25s ease;
+      direction: rtl;
+    }
+    .toast.removing { animation: toastOut .25s ease forwards; }
+    .toast-success { background: #16a34a; }
+    .toast-error   { background: #dc2626; }
+    .toast-info    { background: #2563eb; }
+    .toast-warning { background: #d97706; }
+    .toast-icon    { font-size: 1rem; flex-shrink: 0; }
+    @keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes toastOut { from { opacity:1; transform:translateY(0);    } to { opacity:0; transform:translateY(12px); } }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Toast container ═══ -->
+<div id="toast-container"></div>
+
+<!-- ═══ Sidebar ═══ -->
+<div id="sidebar">
+  <div class="sidebar-logo">
+    <img src="/logo-default.svg" id="sidebar-logo-img" style="max-height:36px;max-width:140px;object-fit:contain" />
+  </div>
+
+  <nav style="padding: 8px 0; flex:1">
+    <div class="nav-item active" onclick="showTab('dashboard')" id="nav-dashboard">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      לוח בקרה
+    </div>
+    <div class="nav-item" onclick="showTab('excel')" id="nav-excel">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      תכנית שבועית
+    </div>
+    <div class="nav-item" onclick="showTab('calendar')" id="nav-calendar">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      לוח שנה
+    </div>
+    <div class="nav-item" onclick="showTab('settings')" id="nav-settings">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      הגדרות
+    </div>
+  </nav>
+
+  <div style="padding: 16px; font-size:.75rem; color:#d1d5db; border-top:1px solid var(--border); white-space:nowrap">
+    v1.0 · gadash
+  </div>
+</div>
+
+<!-- Toggle button -->
+<button id="sidebar-toggle" onclick="toggleSidebar()" title="הסתר/הצג תפריט">‹</button>
+
+<!-- ═══ Main content ═══ -->
+<div id="main">
+
+<!-- ══════════════════ DASHBOARD ══════════════════ -->
+<div id="tab-dashboard" class="page active">
+  <div class="grid2">
+
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        סטטוס חיבורים
+        <div style="display:flex;align-items:center;gap:7px;margin-right:auto">
+          <span style="font-size:.8rem;color:var(--muted);font-weight:500">בוט</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="bot-toggle" checked onchange="toggleBot(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="status-row"><div class="dot" id="wa-dot"></div><span id="wa-label">WhatsApp: בודק...</span></div>
+      <div class="status-row">
+        <div class="dot" id="gc-dot"></div>
+        <span id="gc-label">Google Calendar: בודק...</span>
+        <button id="gc-connect-btn" onclick="connectGoogle()">חבר עכשיו</button>
+      </div>
+      <div class="status-row"><div class="dot green"></div><span id="groups-label">קבוצות: טוען...</span></div>
+
+      <div id="qr-section" class="hidden" style="margin-top:14px">
+        <img id="qr-img" src="" alt="QR Code" />
+        <p>סרוק עם WhatsApp לחיבור</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-5.96"/></svg>
+        סנכרון ידני
+      </div>
+      <button id="sync-btn" class="btn btn-teal" onclick="triggerSync()">סנכרן עכשיו</button>
+      <div id="last-run"></div>
+      <div id="result-box"></div>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      לוג פעילות (בזמן אמת)
+    </div>
+    <div id="log-panel"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ CALENDAR ══════════════════ -->
+<div id="tab-calendar" class="page">
+  <div class="card">
+    <div class="cal-header">
+      <div class="cal-nav">
+        <button class="btn btn-gray" onclick="calNav(-1)">‹</button>
+        <button class="btn btn-gray" onclick="calNav(1)">›</button>
+      </div>
+      <h2 id="cal-title"></h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="cal-view-toggle">
+          <button class="cal-view-btn active" id="view-btn-month" onclick="setCalView('month')">חודש</button>
+          <button class="cal-view-btn" id="view-btn-week"  onclick="setCalView('week')">שבוע</button>
+          <button class="cal-view-btn" id="view-btn-day"   onclick="setCalView('day')">יום</button>
+        </div>
+        <button class="btn btn-teal" onclick="loadCalendar()">רענן</button>
+      </div>
+    </div>
+    <!-- Month view -->
+    <div id="cal-month-view">
+      <div class="cal-grid" id="cal-day-names"></div>
+      <div class="cal-grid" id="cal-cells"></div>
+    </div>
+    <!-- Week view -->
+    <div id="cal-week-view" style="display:none">
+      <div class="week-grid" id="cal-week-grid"></div>
+    </div>
+    <!-- Day view -->
+    <div id="cal-day-view" style="display:none">
+      <div class="day-view" id="cal-day-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ SETTINGS ══════════════════ -->
+<div id="tab-settings" class="page">
+
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      קבוצות WhatsApp למעקב
+    </div>
+    <div class="settings-group">
+      <div class="groups-list" id="groups-list"></div>
+      <div class="add-group-row">
+        <input type="text" id="new-group-input" placeholder="שם קבוצה..." />
+        <button class="btn btn-teal" onclick="addGroup()">הוסף</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      חלון סנכרון
+    </div>
+    <div class="settings-group">
+      <label>כמה שעות אחורה לחפש הודעות</label>
+      <input type="number" id="sync-hours" min="1" max="168" value="24" style="max-width:160px" />
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:0;flex:1">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        סיכום שבועי ב-WhatsApp
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="summary-enabled" onchange="toggleSummarySection(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="summary-body" style="transition:opacity .3s">
+      <div class="settings-group">
+        <label>מספר טלפון (עם קידומת מדינה, לדוגמא 972501234567)</label>
+        <input type="text" id="summary-recipient" placeholder="972501234567" />
+      </div>
+      <div class="settings-group">
+        <label>שעת שליחת הסיכום (לדוגמא 07:30 או 21:15)</label>
+        <input type="time" id="summary-time" style="max-width:160px;padding:8px;border-radius:8px;border:1px solid var(--border);font-size:.93rem;direction:ltr" />
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+        <button class="btn btn-blue" onclick="sendTestMessage()">📱 שלח הודעת בדיקה</button>
+        <span id="test-msg-feedback" style="display:none;font-size:.85rem;font-weight:600"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Theme color ── -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125 0-.92.742-1.562 1.438-1.562h1.664C18.988 16.5 22 13.5 22 10 22 5.5 17.5 2 12 2z"/></svg>
+      צבע ערכת נושא
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+      <div id="color-swatches" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-right:auto">
+        <label style="font-size:.85rem;color:var(--muted);font-weight:500">מותאם אישית:</label>
+        <input type="color" id="theme-color-picker" style="width:40px;height:32px;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:2px" oninput="applyThemeColor(this.value)" />
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="color-preview" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);transition:background .2s"></div>
+      <span id="color-hex" style="font-size:.88rem;color:var(--muted);font-family:monospace;direction:ltr"></span>
+      <button class="btn btn-gray" style="font-size:.82rem;padding:5px 12px;margin-right:auto" onclick="resetThemeColor()">איפוס</button>
+    </div>
+  </div>
+
+  <!-- ── Logo ── -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      לוגו המערכת
+    </div>
+
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <label style="font-size:.85rem;font-weight:600;color:#4b5563;margin-bottom:6px;display:block">כיוון</label>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <label id="orient-landscape" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid var(--teal);border-radius:8px;cursor:pointer;font-size:.87rem;font-weight:500;color:var(--teal);background:var(--teal-light)">
+            <input type="radio" name="logo-orient" value="landscape" checked style="display:none" onchange="updateOrientUI()">
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect width="18" height="12" rx="2" opacity=".3"/></svg>
+            רוחבי
+          </label>
+          <label id="orient-portrait" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:.87rem;font-weight:500;color:var(--muted)">
+            <input type="radio" name="logo-orient" value="portrait" style="display:none" onchange="updateOrientUI()">
+            <svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor"><rect width="12" height="18" rx="2" opacity=".3"/></svg>
+            אנכי
+          </label>
+          <label id="orient-square" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:.87rem;font-weight:500;color:var(--muted)">
+            <input type="radio" name="logo-orient" value="square" style="display:none" onchange="updateOrientUI()">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor"><rect width="15" height="15" rx="2" opacity=".3"/></svg>
+            מרובע
+          </label>
+        </div>
+        <label class="upload-area" for="logo-file-input" id="logo-upload-area" style="padding:16px;margin-bottom:0">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          העלה לוגו (PNG / SVG)
+        </label>
+        <input type="file" id="logo-file-input" accept=".png,.svg,.jpg,.webp" style="display:none" onchange="uploadLogo()" />
+      </div>
+
+      <div id="logo-preview-wrap" style="display:none;flex-shrink:0;text-align:center">
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">תצוגה מקדימה</div>
+        <div id="logo-preview-box" style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;justify-content:center">
+          <img id="logo-preview-img" style="max-height:56px;max-width:160px;object-fit:contain" />
+        </div>
+        <!-- Size slider -->
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;direction:rtl">
+          <span style="font-size:.8rem;color:var(--muted);white-space:nowrap">גודל לוגו</span>
+          <input type="range" id="logo-size-slider" min="40" max="180" value="80"
+            style="flex:1;accent-color:var(--primary);cursor:pointer"
+            oninput="applyLogoSize(this.value)" onchange="saveLogoSize(this.value)" />
+          <span id="logo-size-val" style="font-size:.8rem;color:var(--muted);min-width:34px;text-align:center">80px</span>
+        </div>
+        <button class="btn btn-red" style="margin-top:8px;font-size:.8rem;padding:5px 14px" onclick="removeLogo()">הסר לוגו</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-teal" style="width:100%;padding:13px;font-size:1rem;border-radius:10px" onclick="saveSettings()">שמור הגדרות</button>
+  <div class="save-feedback" id="save-feedback">✓ הגדרות נשמרו בהצלחה</div>
+</div>
+
+<!-- ══════════════════ EXCEL ══════════════════ -->
+<div id="tab-excel" class="page">
+
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      העלאת תוכנית עבודה שבועית
+    </div>
+    <label class="upload-area" for="excel-file-input" id="upload-area">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+      גרור קובץ Excel לכאן או לחץ לבחירה
+    </label>
+    <input type="file" id="excel-file-input" accept=".xlsx,.xls" onchange="onExcelFileSelected()" style="display:none" />
+    <div id="excel-file-status" style="font-size:.83rem;color:var(--muted);margin-top:8px"></div>
+    <button class="btn btn-teal" id="parse-btn" onclick="parseExcelFile()" disabled style="margin-top:10px">נתח קובץ</button>
+  </div>
+
+  <div class="card" id="group-map-card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      מיפוי קבוצות
+    </div>
+    <p style="font-size:.84rem;color:var(--muted);margin-bottom:12px">התאם שמות מהאקסל לקבוצות ב-WhatsApp</p>
+    <table class="group-map-table" id="group-map-table"><tbody></tbody></table>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+      <button class="btn btn-gray" onclick="saveGroupMap()">שמור מיפוי</button>
+      <span id="map-saved-feedback" style="font-size:.82rem;color:#16a34a;display:none">✓ נשמר</span>
+    </div>
+  </div>
+
+  <div class="card" id="excel-preview-card" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:0">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        תצוגה מקדימה — <span id="excel-week-label"></span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <span id="preview-will-send" class="chip chip-send"></span>
+        <span id="preview-skipped" class="chip chip-skip"></span>
+        <span id="preview-nomap" class="chip chip-nomap"></span>
+      </div>
+    </div>
+    <table class="excel-table">
+      <thead><tr><th>קבוצה</th><th>מטלה</th><th>תאריך</th><th>סטטוס</th></tr></thead>
+      <tbody id="excel-preview-body"></tbody>
+    </table>
+    <button class="btn btn-teal" style="width:100%;margin-top:16px;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel()">
+      שלח לכולם ויצור אירועי לוח שנה
+    </button>
+  </div>
+
+  <div class="excel-results" id="excel-results"></div>
+</div>
+
+</div><!-- end #main -->
+
+<script>
+// ── Toast ─────────────────────────────────────────────────────────────────────
+const TOAST_ICONS = { success:'✅', error:'❌', info:'ℹ️', warning:'⚠️' };
+function toast(msg, type = 'success', duration = 3500) {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span class="toast-icon">${TOAST_ICONS[type]}</span><span>${msg}</span>`;
+  const container = document.getElementById('toast-container');
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('removing');
+    setTimeout(() => el.remove(), 260);
+  }, duration);
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────────
+let sidebarCollapsed = false;
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  sb.classList.toggle('collapsed', sidebarCollapsed);
+  btn.textContent = sidebarCollapsed ? '›' : '‹';
+  btn.style.right = sidebarCollapsed ? '-13px' : 'calc(var(--sidebar-w) - 13px)';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const TABS = ['dashboard','excel','calendar','settings'];
+function showTab(name) {
+  TABS.forEach(t => {
+    document.getElementById('nav-' + t)?.classList.toggle('active', t === name);
+    document.getElementById('tab-' + t)?.classList.toggle('active', t === name);
+  });
+  if (name === 'calendar') loadCalendar();
+  if (name === 'settings') loadSettings();
+  if (name === 'excel') initExcelTab();
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+let qrPolling = null;
+
+async function refreshStatus() {
+  try {
+    const s = await fetch('/status').then(r => r.json());
+    const botToggle = document.getElementById('bot-toggle');
+    if (botToggle && s.botEnabled !== undefined) botToggle.checked = s.botEnabled;
+
+    const waDot = document.getElementById('wa-dot');
+    const waLabel = document.getElementById('wa-label');
+    if (!s.botEnabled) {
+      waDot.className = 'dot'; waLabel.textContent = 'WhatsApp: כבוי';
+      stopQrPolling(); document.getElementById('qr-section').classList.add('hidden');
+    } else if (s.whatsappConnected) {
+      waDot.className = 'dot green'; waLabel.textContent = 'WhatsApp: מחובר';
+      stopQrPolling(); document.getElementById('qr-section').classList.add('hidden');
+    } else if (s.qrAvailable) {
+      waDot.className = 'dot yellow'; waLabel.textContent = 'WhatsApp: ממתין לסריקת QR';
+      startQrPolling();
+    } else {
+      waDot.className = 'dot red'; waLabel.textContent = 'WhatsApp: לא מחובר';
+    }
+
+    const gcDot = document.getElementById('gc-dot');
+    const gcLabel = document.getElementById('gc-label');
+    const gcBtn = document.getElementById('gc-connect-btn');
+    if (s.googleAuthenticated) {
+      gcDot.className = 'dot green'; gcLabel.textContent = 'Google Calendar: מחובר';
+      if (gcBtn) gcBtn.style.display = 'none';
+    } else {
+      gcDot.className = 'dot red'; gcLabel.textContent = 'Google Calendar: לא מחובר';
+      if (gcBtn) gcBtn.style.display = 'inline-block';
+    }
+
+    if (s.lastRun) {
+      document.getElementById('last-run').textContent =
+        `סנכרון אחרון: ${new Date(s.lastRun).toLocaleString('he-IL')} | סה"כ: ${s.totalEventsCreated}`;
+    }
+  } catch {}
+}
+
+function startQrPolling() { if (qrPolling) return; fetchQr(); qrPolling = setInterval(fetchQr, 5000); }
+function stopQrPolling()  { if (qrPolling) { clearInterval(qrPolling); qrPolling = null; } }
+async function fetchQr() {
+  try {
+    const r = await fetch('/qr'); if (!r.ok) return;
+    const { qr } = await r.json();
+    document.getElementById('qr-img').src = qr;
+    document.getElementById('qr-section').classList.remove('hidden');
+  } catch {}
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function triggerSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true; btn.textContent = 'מסנכרן...';
+  document.getElementById('result-box').style.display = 'none';
+  toast('סנכרון התחיל...', 'info', 2000);
+  try {
+    const { results } = await fetch('/trigger', { method: 'POST' }).then(r => r.json());
+    showResults(results); refreshStatus();
+    if (results.created.length > 0)
+      toast(`נוצרו ${results.created.length} אירועים חדשים ✨`, 'success');
+    else
+      toast('סנכרון הושלם — אין אירועים חדשים', 'info');
+  } catch (err) {
+    const box = document.getElementById('result-box');
+    box.innerHTML = `<span class="errors">שגיאה: ${err.message}</span>`; box.style.display = 'block';
+    toast('שגיאה בסנכרון', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'סנכרן עכשיו';
+  }
+}
+
+function showResults(r) {
+  const box = document.getElementById('result-box');
+  box.style.display = 'block';
+  let html = '';
+  if (r.created.length) {
+    html += `<div class="created" style="font-weight:600">נוצרו ${r.created.length} אירועים:</div>`;
+    r.created.forEach(e => { html += `<div class="created" style="padding-right:8px">• ${e.title} — ${e.date} (${e.calendar})</div>`; });
+  }
+  if (r.skipped.length) html += `<div class="skipped-text">דולגו (כפולים): ${r.skipped.length}</div>`;
+  r.errors.forEach(e => { html += `<div class="errors">✗ ${e}</div>`; });
+  if (!r.created.length && !r.errors.length) html += '<div class="skipped-text">אין אירועים חדשים</div>';
+  box.innerHTML = html;
+}
+
+// ── Log (SSE) ─────────────────────────────────────────────────────────────────
+const panel = document.getElementById('log-panel');
+function appendLog(text, cls = '') {
+  const ts = new Date().toLocaleTimeString('he-IL');
+  const line = document.createElement('div');
+  line.className = cls;
+  line.innerHTML = `<span class="ts">[${ts}]</span> ${esc(text)}`;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+  while (panel.children.length > 200) panel.removeChild(panel.firstChild);
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function logClass(t) {
+  if (t.includes('ERROR') || t.includes('error')) return 'err';
+  if (t.includes('[Sync]') || t.includes('[Realtime]')) return 'sync';
+  if (t.includes('[WhatsApp]')) return 'wa';
+  return '';
+}
+const es = new EventSource('/events');
+es.onmessage = e => {
+  const { type, data } = JSON.parse(e.data);
+  if (type === 'log') appendLog(data, logClass(data));
+  else if (type === 'status' || type === 'syncComplete' || type === 'google-auth') refreshStatus();
+};
+es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calDay   = new Date().getDate();
+let calView  = 'month'; // 'month' | 'week' | 'day'
+let calEventsCache = [];
+
+const DAY_NAMES_HE   = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+const DAY_FULL_HE    = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const MONTH_NAMES_HE = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+const CAL_COLORS = {
+  'השקיה':  { bg:'#dbeafe', fg:'#1d4ed8', dot:'#3b82f6' },
+  'ריסוסים':{ bg:'#fef9c3', fg:'#854d0e', dot:'#f59e0b' },
+  'עבודות': { bg:'#fce7f3', fg:'#9d174d', dot:'#ec4899' },
+  'דישונים':{ bg:'#ede9fe', fg:'#5b21b6', dot:'#8b5cf6' },
+  'default': { bg:'#dcfce7', fg:'#15803d', dot:'#22c55e' },
+};
+function calColor(cal) { return CAL_COLORS[cal] || CAL_COLORS.default; }
+
+function setCalView(v) {
+  calView = v;
+  ['month','week','day'].forEach(x => {
+    document.getElementById('view-btn-'+x).classList.toggle('active', x === v);
+    document.getElementById('cal-'+x+'-view').style.display = x === v ? '' : 'none';
+  });
+  renderCalendar();
+}
+
+function calNav(dir) {
+  if (calView === 'month') {
+    calMonth += dir;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    if (calMonth < 0)  { calMonth = 11; calYear--; }
+  } else if (calView === 'week') {
+    const d = new Date(calYear, calMonth, calDay);
+    d.setDate(d.getDate() + dir * 7);
+    calYear = d.getFullYear(); calMonth = d.getMonth(); calDay = d.getDate();
+  } else {
+    const d = new Date(calYear, calMonth, calDay);
+    d.setDate(d.getDate() + dir);
+    calYear = d.getFullYear(); calMonth = d.getMonth(); calDay = d.getDate();
+  }
+  renderCalendar();
+}
+
+async function loadCalendar() {
+  try {
+    const { events } = await fetch('/calendar-events').then(r => r.json());
+    calEventsCache = events || [];
+  } catch { calEventsCache = []; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  if (calView === 'month') renderMonth();
+  else if (calView === 'week') renderWeek();
+  else renderDay();
+}
+
+// ── Month ──
+function renderMonth() {
+  document.getElementById('cal-title').textContent = `${MONTH_NAMES_HE[calMonth]} ${calYear}`;
+  document.getElementById('cal-day-names').innerHTML = DAY_NAMES_HE.map(d => `<div class="cal-day-name">${d}</div>`).join('');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const evMap = buildEvMap();
+  const cells = document.getElementById('cal-cells');
+  cells.innerHTML = '';
+  for (let i = 0; i < firstDay; i++) cells.appendChild(emptyCell());
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateISO = isoDate(calYear, calMonth + 1, d);
+    const isToday = new Date(calYear, calMonth, d).getTime() === today.getTime();
+    const events = evMap[dateISO] || [];
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell' + (isToday ? ' today' : '');
+    cell.innerHTML = `<div class="cal-num">${d}</div>` +
+      events.slice(0, 3).map(ev => {
+        const c = calColor(ev.calendar);
+        return `<div class="cal-event" style="background:${c.bg};color:${c.fg}" title="${esc(ev.title)}">${esc(ev.title)}</div>`;
+      }).join('') +
+      (events.length > 3 ? `<div style="font-size:.67rem;color:var(--muted)">+${events.length-3} עוד</div>` : '');
+    cells.appendChild(cell);
+  }
+  const remainder = (firstDay + daysInMonth) % 7;
+  if (remainder !== 0) for (let i = 0; i < 7 - remainder; i++) cells.appendChild(emptyCell());
+}
+
+// ── Week ──
+function renderWeek() {
+  const base = new Date(calYear, calMonth, calDay);
+  const sunday = new Date(base); sunday.setDate(base.getDate() - base.getDay());
+  const saturday = new Date(sunday); saturday.setDate(sunday.getDate() + 6);
+  const fmt = d => `${d.getDate()} ${MONTH_NAMES_HE[d.getMonth()]}`;
+  document.getElementById('cal-title').textContent = `${fmt(sunday)} – ${fmt(saturday)} ${saturday.getFullYear()}`;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const evMap = buildEvMap();
+  const grid = document.getElementById('cal-week-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(sunday); d.setDate(sunday.getDate() + i);
+    const dateISO = isoDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    const isToday = d.getTime() === today.getTime();
+    const events = evMap[dateISO] || [];
+    const col = document.createElement('div');
+    col.className = 'week-col' + (isToday ? ' today' : '');
+    const evHtml = events.length
+      ? events.map(ev => {
+          const c = calColor(ev.calendar);
+          return `<div class="week-event" style="background:${c.bg};color:${c.fg}">${esc(ev.title)}<div style="font-size:.68rem;opacity:.7;margin-top:2px">${esc(ev.calendar)}</div></div>`;
+        }).join('')
+      : `<div class="week-empty">—</div>`;
+    col.innerHTML = `
+      <div class="week-col-header">
+        <div class="wday">${DAY_NAMES_HE[i]}</div>
+        <div class="wdate">${d.getDate()}</div>
+      </div>
+      <div class="week-col-body">${evHtml}</div>`;
+    col.addEventListener('click', () => { calYear = d.getFullYear(); calMonth = d.getMonth(); calDay = d.getDate(); setCalView('day'); });
+    col.style.cursor = 'pointer';
+    grid.appendChild(col);
+  }
+}
+
+// ── Day ──
+function renderDay() {
+  const d = new Date(calYear, calMonth, calDay);
+  const dayName = DAY_FULL_HE[d.getDay()];
+  document.getElementById('cal-title').textContent = `יום ${dayName}, ${calDay} ${MONTH_NAMES_HE[calMonth]} ${calYear}`;
+  const dateISO = isoDate(calYear, calMonth + 1, calDay);
+  const events = buildEvMap()[dateISO] || [];
+  const list = document.getElementById('cal-day-list');
+  if (!events.length) {
+    list.innerHTML = `<div class="day-no-events">אין משימות ביום זה</div>`;
+    return;
+  }
+  list.innerHTML = events.map(ev => {
+    const c = calColor(ev.calendar);
+    return `<div class="day-event">
+      <div class="day-event-dot" style="background:${c.dot}"></div>
+      <div>
+        <div class="day-event-title">${esc(ev.title)}</div>
+        <div class="day-event-cal" style="color:${c.dot}">${esc(ev.calendar)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Helpers ──
+function buildEvMap() {
+  const map = {};
+  for (const ev of calEventsCache) {
+    if (!map[ev.date]) map[ev.date] = [];
+    map[ev.date].push(ev);
+  }
+  return map;
+}
+function isoDate(y, m, d) { return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+function emptyCell() { const c = document.createElement('div'); c.className = 'cal-cell other-month'; return c; }
+
+// ── Settings helpers ──────────────────────────────────────────────────────────
+let settingsGroups = [];
+
+function renderGroupTags() {
+  document.getElementById('groups-list').innerHTML = settingsGroups.map((g, i) =>
+    `<div class="group-tag">${esc(g)}<button onclick="removeGroup(${i})" title="הסר">×</button></div>`
+  ).join('');
+}
+
+function addGroup() {
+  const input = document.getElementById('new-group-input');
+  const val = input.value.trim();
+  if (!val) return;
+  if (settingsGroups.includes(val)) { toast('הקבוצה כבר קיימת', 'warning'); return; }
+  settingsGroups.push(val); renderGroupTags();
+  toast(`קבוצה נוספה: ${val}`, 'success');
+  input.value = '';
+}
+
+function removeGroup(i) {
+  const name = settingsGroups[i];
+  settingsGroups.splice(i, 1); renderGroupTags();
+  toast(`קבוצה הוסרה: ${name}`, 'warning');
+}
+document.getElementById('new-group-input').addEventListener('keydown', e => { if (e.key === 'Enter') addGroup(); });
+
+function toggleSummarySection(enabled) {
+  const body = document.getElementById('summary-body');
+  body.style.opacity = enabled ? '1' : '0.4';
+  body.style.pointerEvents = enabled ? '' : 'none';
+}
+
+async function sendTestMessage() {
+  toast('שולח הודעת בדיקה...', 'info', 2000);
+  try {
+    const res = await fetch('/test-message', { method: 'POST' }).then(r => r.json());
+    if (res.ok) toast(`הודעת בדיקה נשלחה ל-${res.recipient}`, 'success');
+    else toast('שליחה נכשלה — בדוק שWhatsApp מחובר', 'error');
+  } catch { toast('שגיאה בשליחה', 'error'); }
+}
+
+// ── Excel ─────────────────────────────────────────────────────────────────────
+let excelParsedTasks = [];
+let excelGroupMap = {};
+
+async function initExcelTab() {
+  excelGroupMap = await fetch('/excel/group-map').then(r => r.json()).catch(() => ({}));
+  renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
+}
+
+function onExcelFileSelected() {
+  const input = document.getElementById('excel-file-input');
+  const btn = document.getElementById('parse-btn');
+  const status = document.getElementById('excel-file-status');
+  const area = document.getElementById('upload-area');
+  if (input.files.length) {
+    btn.disabled = false;
+    status.textContent = `📄 קובץ נבחר: ${input.files[0].name}`;
+    area.style.borderColor = 'var(--teal)';
+    area.style.background = 'var(--teal-light)';
+  } else {
+    btn.disabled = true; status.textContent = '';
+    area.style.borderColor = ''; area.style.background = '';
+  }
+}
+
+async function parseExcelFile() {
+  const input = document.getElementById('excel-file-input');
+  if (!input.files.length) return;
+  const btn = document.getElementById('parse-btn');
+  btn.disabled = true; btn.textContent = 'מנתח...';
+  try {
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    const res = await fetch('/excel/parse', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'שגיאה בניתוח');
+    excelParsedTasks = data.tasks;
+    const newGroups = [...new Set(data.tasks.map(t => t.excelGroup))];
+    newGroups.forEach(g => { if (!(g in excelGroupMap)) excelGroupMap[g] = g; });
+    renderGroupMapTable(newGroups);
+    document.getElementById('excel-week-label').textContent = data.weekLabel;
+    renderExcelPreview(data.tasks);
+    document.getElementById('excel-preview-card').style.display = 'block';
+  } catch (err) {
+    document.getElementById('excel-file-status').textContent = `❌ ${err.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'נתח קובץ';
+  }
+}
+
+function renderGroupMapTable(groups) {
+  const tbody = document.querySelector('#group-map-table tbody');
+  if (!groups.length) { tbody.innerHTML = '<tr><td style="color:var(--muted)">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>'; return; }
+  tbody.innerHTML = groups.map(g => `
+    <tr>
+      <td style="font-weight:600;min-width:140px">${esc(g)}</td>
+      <td style="color:var(--muted)">→</td>
+      <td><input type="text" data-excel-group="${esc(g)}" value="${esc(excelGroupMap[g] || g)}" placeholder="שם קבוצת WhatsApp" /></td>
+    </tr>`).join('');
+}
+
+async function saveGroupMap() {
+  const inputs = document.querySelectorAll('#group-map-table input');
+  const map = {};
+  inputs.forEach(inp => { map[inp.dataset.excelGroup] = inp.value.trim(); });
+  excelGroupMap = map;
+  await fetch('/excel/group-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
+  const fb = document.getElementById('map-saved-feedback');
+  fb.style.display = 'inline'; setTimeout(() => fb.style.display = 'none', 2000);
+  if (excelParsedTasks.length) {
+    const updated = excelParsedTasks.map(t => ({ ...t, whatsappGroup: map[t.excelGroup] || '', willSend: !!(map[t.excelGroup]) }));
+    excelParsedTasks = updated;
+    renderExcelPreview(updated);
+  }
+}
+
+function renderExcelPreview(tasks) {
+  const willSend = tasks.filter(t => t.willSend && !t.alreadySent).length;
+  const alreadySent = tasks.filter(t => t.alreadySent).length;
+  const noMap = tasks.filter(t => !t.willSend).length;
+  document.getElementById('preview-will-send').textContent = `✅ ישלח: ${willSend}`;
+  document.getElementById('preview-skipped').textContent = `⏭ כבר נשלח: ${alreadySent}`;
+  document.getElementById('preview-nomap').textContent = noMap ? `⚠️ ללא מיפוי: ${noMap}` : '';
+  document.getElementById('excel-preview-body').innerHTML = tasks.map((t, i) => {
+    let chip, chipClass, resendBtn = '';
+    if (t.alreadySent) {
+      chip = 'כבר נשלח'; chipClass = 'chip-skip';
+      resendBtn = `<button class="resend-btn" onclick="resendTask(${i}, this)" title="שלח שוב">↩ שלח שוב</button>`;
+    } else if (!t.willSend) {
+      chip = 'ללא מיפוי'; chipClass = 'chip-nomap';
+    } else {
+      chip = 'ישלח'; chipClass = 'chip-send';
+    }
+    return `<tr id="task-row-${i}">
+      <td>${esc(t.whatsappGroup || t.excelGroup)}</td>
+      <td>${esc(t.taskText)}</td>
+      <td style="direction:ltr;text-align:left;color:var(--muted)">${t.dateLabel}</td>
+      <td><span class="chip ${chipClass}" id="task-chip-${i}">${chip}</span>${resendBtn}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('dispatch-btn').disabled = willSend === 0;
+}
+
+async function resendTask(index, btn) {
+  const task = excelParsedTasks[index];
+  if (!task) return;
+  btn.disabled = true;
+  const chip = document.getElementById(`task-chip-${index}`);
+  chip.className = 'chip chip-sending';
+  chip.textContent = 'שולח...';
+  try {
+    const res = await fetch('/excel/resend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      chip.className = 'chip chip-resent';
+      chip.textContent = data.whatsappSent ? '✅ נשלח' : '📅 יומן בלבד';
+      btn.remove();
+      toast(`"${task.taskText}" נשלח מחדש`, 'success');
+    } else {
+      chip.className = 'chip chip-skip';
+      chip.textContent = 'כבר נשלח';
+      btn.disabled = false;
+      toast(`שגיאה: ${data.error || 'שליחה נכשלה'}`, 'error');
+    }
+  } catch (err) {
+    chip.className = 'chip chip-skip';
+    chip.textContent = 'כבר נשלח';
+    btn.disabled = false;
+    toast('שגיאה בשליחה חוזרת', 'error');
+  }
+}
+
+async function dispatchExcel() {
+  const btn = document.getElementById('dispatch-btn');
+  btn.disabled = true; btn.textContent = 'שולח...';
+  try {
+    const toSend = excelParsedTasks.filter(t => t.willSend && !t.alreadySent);
+    const res = await fetch('/excel/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: toSend }) });
+    const data = await res.json();
+    const resultsEl = document.getElementById('excel-results');
+    let html = '';
+    if (data.created.length) {
+      html += `<div class="created" style="font-weight:600">נוצרו ${data.created.length} אירועים:</div>`;
+      data.created.forEach(e => { html += `<div class="created" style="padding-right:8px">• ${esc(e.title)} — ${e.date}</div>`; });
+      toast(`נשלחו ${data.created.length} משימות ליומן ✨`, 'success');
+    } else {
+      toast('לא נשלחו משימות חדשות', 'info');
+    }
+    if (data.skipped.length) html += `<div class="skipped-text">דולגו: ${data.skipped.length}</div>`;
+    data.errors.forEach(e => { html += `<div class="errors">✗ ${esc(e)}</div>`; });
+    if (!data.created.length && !data.errors.length) html += '<div class="skipped-text">אין אירועים חדשים לשלוח</div>';
+    resultsEl.innerHTML = html; resultsEl.style.display = 'block';
+    excelParsedTasks = excelParsedTasks.map(t => ({ ...t, alreadySent: t.alreadySent || (t.willSend && !t.alreadySent) }));
+    renderExcelPreview(excelParsedTasks);
+  } catch (err) {
+    const r = document.getElementById('excel-results');
+    r.innerHTML = `<div class="errors">❌ ${esc(err.message)}</div>`; r.style.display = 'block';
+    toast('שגיאה בשליחה', 'error');
+  } finally {
+    btn.textContent = 'שלח לכולם ויצור אירועי לוח שנה';
+  }
+}
+
+// ── Bot On/Off ─────────────────────────────────────────────────────────────────
+let botToggleBusy = false;
+async function toggleBot(enabled) {
+  if (botToggleBusy) return;
+  botToggleBusy = true;
+  const toggle = document.getElementById('bot-toggle');
+  toggle.disabled = true;
+  try {
+    await fetch(enabled ? '/bot/start' : '/bot/stop', { method: 'POST' });
+    await new Promise(r => setTimeout(r, 1500));
+    await refreshStatus();
+    toast(enabled ? 'הבוט הופעל ✅' : 'הבוט הופסק', enabled ? 'success' : 'warning');
+  } finally { toggle.disabled = false; botToggleBusy = false; }
+}
+
+// ── Google Calendar Connect ────────────────────────────────────────────────────
+async function connectGoogle() {
+  const btn = document.getElementById('gc-connect-btn');
+  btn.textContent = '⏳ מתחבר...'; btn.disabled = true;
+  try {
+    const { authUrl, error } = await fetch('/auth/google/start').then(r => r.json());
+    if (error) { btn.textContent = '❌ שגיאה'; btn.disabled = false; toast('שגיאה בחיבור Google', 'error'); return; }
+    window.open(authUrl, '_blank');
+    btn.textContent = '⏳ ממתין לאישור...';
+    toast('נפתח חלון התחברות Google — אשר גישה', 'info', 5000);
+    const poll = setInterval(async () => {
+      const s = await fetch('/status').then(r => r.json());
+      if (s.googleAuthenticated) {
+        clearInterval(poll);
+        await refreshStatus();
+        toast('Google Calendar חובר בהצלחה!', 'success');
+      }
+    }, 2000);
+    setTimeout(() => { clearInterval(poll); btn.textContent = 'חבר עכשיו'; btn.disabled = false; }, 120000);
+  } catch { btn.textContent = 'חבר עכשיו'; btn.disabled = false; toast('שגיאה בחיבור Google', 'error'); }
+}
+
+// ── Theme color ───────────────────────────────────────────────────────────────
+const PRESET_COLORS = ['#3DBDB4','#6366f1','#f59e0b','#ef4444','#10b981','#3b82f6','#8b5cf6','#ec4899','#1a1a2e'];
+
+function buildSwatches() {
+  const wrap = document.getElementById('color-swatches');
+  wrap.innerHTML = PRESET_COLORS.map(c => `
+    <button onclick="applyThemeColor('${c}')"
+      title="${c}"
+      style="width:26px;height:26px;border-radius:50%;background:${c};border:2px solid transparent;cursor:pointer;transition:transform .1s,border .1s"
+      onmouseover="this.style.transform='scale(1.18)'"
+      onmouseout="this.style.transform='scale(1)'"
+      id="swatch-${c.replace('#','')}">
+    </button>`).join('');
+}
+
+function applyThemeColor(hex) {
+  document.documentElement.style.setProperty('--teal', hex);
+  // Compute a lighter version for teal-light and a darker for teal-dark
+  document.documentElement.style.setProperty('--teal-light', hex + '22');
+  document.documentElement.style.setProperty('--teal-dark', hex);
+  const picker = document.getElementById('theme-color-picker');
+  if (picker) picker.value = hex;
+  const preview = document.getElementById('color-preview');
+  if (preview) preview.style.background = hex;
+  const hexLabel = document.getElementById('color-hex');
+  if (hexLabel) hexLabel.textContent = hex.toUpperCase();
+  // Highlight active swatch
+  document.querySelectorAll('#color-swatches button').forEach(b => {
+    b.style.border = b.title.toLowerCase() === hex.toLowerCase() ? '2px solid #333' : '2px solid transparent';
+  });
+}
+
+function resetThemeColor() { applyThemeColor('#3DBDB4'); }
+
+// ── Logo ──────────────────────────────────────────────────────────────────────
+function updateOrientUI() {
+  const val = document.querySelector('input[name="logo-orient"]:checked')?.value;
+  ['landscape','portrait','square'].forEach(o => {
+    const el = document.getElementById('orient-' + o);
+    if (!el) return;
+    const active = val === o;
+    el.style.borderColor = active ? 'var(--teal)' : 'var(--border)';
+    el.style.color       = active ? 'var(--teal)' : 'var(--muted)';
+    el.style.background  = active ? 'var(--teal-light)' : '';
+  });
+}
+
+async function uploadLogo() {
+  const input = document.getElementById('logo-file-input');
+  if (!input.files.length) return;
+  const orientation = document.querySelector('input[name="logo-orient"]:checked')?.value || 'landscape';
+  const fd = new FormData();
+  fd.append('logo', input.files[0]);
+  fd.append('orientation', orientation);
+  try {
+    const res = await fetch('/config/logo', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) { showLogoPreview(data.logoData, orientation); toast('לוגו הועלה בהצלחה', 'success'); }
+    else toast('שגיאה בהעלאת הלוגו', 'error');
+  } catch { toast('שגיאה בהעלאת הלוגו', 'error'); }
+}
+
+function showLogoPreview(dataUrl, orientation) {
+  if (!dataUrl) return;
+  document.getElementById('logo-preview-img').src = dataUrl;
+  document.getElementById('logo-preview-wrap').style.display = 'block';
+  // Apply to sidebar
+  applySidebarLogo(dataUrl, orientation);
+}
+
+function applySidebarLogo(dataUrl, orientation) {
+  const img  = document.getElementById('sidebar-logo-img');
+  const wrap = document.querySelector('.sidebar-logo');
+  if (!img || !wrap) return;
+
+  img.src = dataUrl || '/logo-default.svg';
+
+  if (!dataUrl) {
+    img.style.maxHeight = '36px';
+    img.style.maxWidth  = '140px';
+    img.style.width     = '';
+    wrap.style.padding  = '22px 18px 16px';
+    return;
+  }
+
+  const size = parseInt(localStorage.getItem('logoSize') || '80', 10);
+  applyLogoSizeToSidebar(size, orientation);
+}
+
+function applyLogoSize(val) {
+  const size = parseInt(val, 10);
+  document.getElementById('logo-size-val').textContent = size + 'px';
+
+  // Update preview image
+  const preview = document.getElementById('logo-preview-img');
+  if (preview) { preview.style.maxHeight = size + 'px'; preview.style.maxWidth = (size * 2.5) + 'px'; }
+
+  // Update sidebar
+  const orientation = document.querySelector('input[name="logo-orient"]:checked')?.value || 'landscape';
+  applyLogoSizeToSidebar(size, orientation);
+}
+
+function applyLogoSizeToSidebar(size, orientation) {
+  const img  = document.getElementById('sidebar-logo-img');
+  const wrap = document.querySelector('.sidebar-logo');
+  if (!img || !wrap) return;
+
+  if (orientation === 'square') {
+    img.style.width     = size + 'px';
+    img.style.height    = size + 'px';
+    img.style.maxWidth  = '100%';
+    img.style.maxHeight = size + 'px';
+    wrap.style.padding  = '14px 18px';
+  } else if (orientation === 'portrait') {
+    img.style.width     = '';
+    img.style.height    = '';
+    img.style.maxHeight = size + 'px';
+    img.style.maxWidth  = Math.round(size * 0.6) + 'px';
+    wrap.style.padding  = '22px 18px 16px';
+  } else {
+    img.style.width     = '';
+    img.style.height    = '';
+    img.style.maxHeight = Math.round(size * 0.5) + 'px';
+    img.style.maxWidth  = size * 2 + 'px';
+    wrap.style.padding  = '22px 18px 16px';
+  }
+}
+
+async function saveLogoSize(val) {
+  localStorage.setItem('logoSize', val);
+  // Persist to server config too
+  try { await fetch('/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ logoSize: parseInt(val,10) }) }); } catch {}
+}
+
+async function removeLogo() {
+  await fetch('/config/logo', { method: 'DELETE' });
+  document.getElementById('logo-preview-wrap').style.display = 'none';
+  document.getElementById('logo-file-input').value = '';
+  document.getElementById('logo-upload-area').style.borderColor = '';
+  document.getElementById('logo-upload-area').style.background = '';
+  applySidebarLogo(null, 'landscape');
+  toast('הלוגו הוסר — חזרנו לברירת המחדל', 'info');
+}
+
+// ── Settings (extended) ───────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const cfg = await fetch('/config').then(r => r.json());
+    settingsGroups = [...cfg.groups];
+    document.getElementById('sync-hours').value = cfg.syncWindowHours;
+    document.getElementById('summary-recipient').value = cfg.summaryRecipient || '';
+    const h = String(cfg.summaryHour ?? 7).padStart(2, '0');
+    const m = String(cfg.summaryMinute ?? 0).padStart(2, '0');
+    document.getElementById('summary-time').value = `${h}:${m}`;
+    const enabled = cfg.summaryEnabled !== false;
+    document.getElementById('summary-enabled').checked = enabled;
+    // Restore logo size slider
+    const savedSize = cfg.logoSize || parseInt(localStorage.getItem('logoSize') || '80', 10);
+    const slider = document.getElementById('logo-size-slider');
+    if (slider) { slider.value = savedSize; document.getElementById('logo-size-val').textContent = savedSize + 'px'; }
+    toggleSummarySection(enabled);
+    renderGroupTags();
+    document.getElementById('groups-label').textContent = 'קבוצות: ' + cfg.groups.join(' | ');
+    // Theme color
+    const color = cfg.themeColor || '#3DBDB4';
+    buildSwatches();
+    applyThemeColor(color);
+    // Logo
+    if (cfg.logoData) {
+      showLogoPreview(cfg.logoData, cfg.logoOrientation || 'landscape');
+      const orient = cfg.logoOrientation || 'landscape';
+      const radio = document.querySelector(`input[name="logo-orient"][value="${orient}"]`);
+      if (radio) { radio.checked = true; updateOrientUI(); }
+    } else {
+      buildSwatches();
+    }
+  } catch {}
+}
+
+async function saveSettings() {
+  const body = {
+    groups: settingsGroups,
+    syncWindowHours: parseInt(document.getElementById('sync-hours').value, 10),
+    summaryEnabled: document.getElementById('summary-enabled').checked,
+    summaryRecipient: document.getElementById('summary-recipient').value.trim(),
+    summaryHour: parseInt((document.getElementById('summary-time').value || '07:00').split(':')[0], 10),
+    summaryMinute: parseInt((document.getElementById('summary-time').value || '07:00').split(':')[1], 10),
+    themeColor: document.getElementById('theme-color-picker')?.value || '#3DBDB4',
+  };
+  try {
+    await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    document.getElementById('groups-label').textContent = 'קבוצות: ' + body.groups.join(' | ');
+    toast('הגדרות נשמרו בהצלחה', 'success');
+  } catch {
+    toast('שגיאה בשמירת הגדרות', 'error');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+refreshStatus();
+loadSettings();
+buildSwatches();
+setInterval(refreshStatus, 15000);
+</script>
+</body>
+</html>
