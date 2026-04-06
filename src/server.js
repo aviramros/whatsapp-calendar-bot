@@ -185,10 +185,15 @@ app.get('/qr', async (req, res) => {
 });
 
 // ─── Google OAuth endpoints ───────────────────────────────────────────────────
+// Helper: get correct protocol even behind Railway's reverse proxy
+function getBaseUrl(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  return proto + '://' + req.get('host');
+}
+
 app.get('/auth/google/start', (req, res) => {
   try {
-    const host = req.protocol + '://' + req.get('host');
-    const redirectUri = host + '/auth/google/callback';
+    const redirectUri = getBaseUrl(req) + '/auth/google/callback';
     const oAuth2Client = createOAuthClient(redirectUri);
     const authUrl = oAuth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -205,8 +210,7 @@ app.get('/auth/google/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.send('<h2>שגיאה — לא התקבל קוד מ-Google</h2>');
   try {
-    const host = req.protocol + '://' + req.get('host');
-    const oAuth2Client = createOAuthClient(host + '/auth/google/callback');
+    const oAuth2Client = createOAuthClient(getBaseUrl(req) + '/auth/google/callback');
     const { tokens } = await oAuth2Client.getToken(code);
     writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', JSON.stringify(tokens, null, 2));
     broadcast('google-auth', { authenticated: true });
