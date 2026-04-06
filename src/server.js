@@ -1,4 +1,16 @@
 import 'dotenv/config';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+
+// Decode Google credentials from env var (for cloud deployments)
+if (process.env.GOOGLE_OAUTH_BASE64) {
+  const credsPath = process.env.GOOGLE_CREDENTIALS_PATH || './credentials/google-oauth.json';
+  mkdirSync(new URL('../credentials', import.meta.url).pathname, { recursive: true });
+  if (!existsSync(credsPath)) {
+    writeFileSync(credsPath, Buffer.from(process.env.GOOGLE_OAUTH_BASE64, 'base64').toString('utf8'));
+    console.log('[Server] Google credentials written from env var');
+  }
+}
+
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
