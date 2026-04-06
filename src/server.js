@@ -40,6 +40,7 @@ import {
   fetchUpcomingEvents,
   fetchWeekEvents,
   startGoogleAuthFlow,
+  createOAuthClient,
 } from './calendar.js';
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute } from './scheduler.js';
 
@@ -180,6 +181,42 @@ app.get('/qr', async (req, res) => {
     res.json({ qr: await QRCode.toDataURL(qr) });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Google OAuth endpoints ───────────────────────────────────────────────────
+app.get('/auth/google/start', (req, res) => {
+  try {
+    const host = req.protocol + '://' + req.get('host');
+    const redirectUri = host + '/auth/google/callback';
+    const oAuth2Client = createOAuthClient(redirectUri);
+    const authUrl = oAuth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      prompt: 'consent',
+    });
+    res.json({ authUrl, redirectUri });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.send('<h2>שגיאה — לא התקבל קוד מ-Google</h2>');
+  try {
+    const host = req.protocol + '://' + req.get('host');
+    const oAuth2Client = createOAuthClient(host + '/auth/google/callback');
+    const { tokens } = await oAuth2Client.getToken(code);
+    writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', JSON.stringify(tokens, null, 2));
+    broadcast('google-auth', { authenticated: true });
+    res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:60px;direction:rtl">
+      <h2>✅ Google Calendar מחובר בהצלחה!</h2>
+      <p>אפשר לסגור את הכרטיסייה הזו ולחזור לבוט.</p>
+      <script>setTimeout(()=>window.close(),2000)</script>
+    </body></html>`);
+  } catch (err) {
+    res.send('<h2>שגיאה: ' + err.message + '</h2><p>ייתכן שצריך להוסיף את כתובת ה-callback לרשימת ה-redirect URIs ב-Google Cloud Console</p>');
   }
 });
 

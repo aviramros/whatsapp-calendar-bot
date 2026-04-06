@@ -14,14 +14,14 @@ function getTokenPath() {
   return process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json';
 }
 
-export function createOAuthClient() {
+export function createOAuthClient(customRedirectUri) {
   const credsPath = getCredentialsPath();
   if (!existsSync(credsPath)) {
     throw new Error(`Google credentials not found at ${credsPath}. See README for setup instructions.`);
   }
   const credentials = JSON.parse(readFileSync(credsPath, 'utf8'));
   const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
-  return new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+  return new google.auth.OAuth2(client_id, client_secret, customRedirectUri || redirect_uris[0]);
 }
 
 export function isGoogleAuthenticated() {
