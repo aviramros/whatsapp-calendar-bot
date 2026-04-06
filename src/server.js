@@ -268,6 +268,24 @@ app.post('/config', (req, res) => {
 });
 
 // Logo upload
+app.post('/config/google-credentials', (req, res) => {
+  const { oauth, token } = req.body;
+  if (!oauth) return res.status(400).json({ ok: false, error: 'oauth missing' });
+  try {
+    JSON.parse(oauth);
+    const credDir = new URL('../credentials', import.meta.url).pathname;
+    mkdirSync(credDir, { recursive: true });
+    writeFileSync(process.env.GOOGLE_CREDENTIALS_PATH || './credentials/google-oauth.json', oauth);
+    if (token) {
+      JSON.parse(token);
+      writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', token);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/config/logo', upload.single('logo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const allowed = ['image/png', 'image/svg+xml', 'image/jpeg', 'image/webp'];

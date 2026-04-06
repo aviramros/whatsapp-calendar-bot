@@ -384,6 +384,27 @@
 </head>
 <body>
 
+<!-- ═══ Credentials Modal ═══ -->
+<div id="credentials-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:28px;width:min(520px,90vw);direction:rtl;max-height:90vh;overflow-y:auto">
+    <h3 style="margin:0 0 6px">⚙️ הגדרת Google Calendar ידנית</h3>
+    <p style="color:var(--muted);font-size:.88rem;margin:0 0 20px">הדבק את קבצי ה-credentials מ-Google Cloud Console</p>
+
+    <label style="font-weight:600;font-size:.9rem">google-oauth.json <span style="font-weight:400;color:var(--muted)">(חובה)</span></label>
+    <textarea id="cred-oauth" rows="5" placeholder='{"installed":{"client_id":"...","client_secret":"...","redirect_uris":["http://localhost:3001"]}}'
+      style="width:100%;margin:6px 0 16px;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:.8rem;resize:vertical;box-sizing:border-box;direction:ltr"></textarea>
+
+    <label style="font-weight:600;font-size:.9rem">google-token.json <span style="font-weight:400;color:var(--muted)">(אופציונלי — אם כבר אומת)</span></label>
+    <textarea id="cred-token" rows="4" placeholder='{"access_token":"...","refresh_token":"...","scope":"...","token_type":"Bearer"}'
+      style="width:100%;margin:6px 0 20px;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:.8rem;resize:vertical;box-sizing:border-box;direction:ltr"></textarea>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="closeCredentialsModal()" style="padding:9px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;cursor:pointer">ביטול</button>
+      <button onclick="saveCredentials()" style="padding:9px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">שמור והתחבר</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Toast container ═══ -->
 <div id="toast-container"></div>
 
@@ -444,6 +465,7 @@
         <div class="dot" id="gc-dot"></div>
         <span id="gc-label">Google Calendar: בודק...</span>
         <button id="gc-connect-btn" onclick="connectGoogle()">חבר עכשיו</button>
+        <button onclick="openCredentialsModal()" style="margin-right:6px;font-size:.8rem;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;color:var(--muted)">⚙️ הגדרה ידנית</button>
       </div>
       <div class="status-row"><div class="dot green"></div><span id="groups-label">קבוצות: טוען...</span></div>
 
@@ -1230,6 +1252,42 @@ async function toggleBot(enabled) {
     await refreshStatus();
     toast(enabled ? 'הבוט הופעל ✅' : 'הבוט הופסק', enabled ? 'success' : 'warning');
   } finally { toggle.disabled = false; botToggleBusy = false; }
+}
+
+// ── Google Credentials Modal ──────────────────────────────────────────────────
+function openCredentialsModal() {
+  document.getElementById('credentials-modal').style.display = 'flex';
+}
+function closeCredentialsModal() {
+  document.getElementById('credentials-modal').style.display = 'none';
+}
+async function saveCredentials() {
+  const oauth = document.getElementById('cred-oauth').value.trim();
+  const token = document.getElementById('cred-token').value.trim();
+  if (!oauth) { toast('יש להדביק את קובץ google-oauth.json', 'warning'); return; }
+  try {
+    JSON.parse(oauth);
+    if (token) JSON.parse(token);
+  } catch { toast('JSON לא תקין — בדוק שהעתקת נכון', 'error'); return; }
+
+  try {
+    const res = await fetch('/config/google-credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oauth, token: token || null })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closeCredentialsModal();
+      toast('Credentials נשמרו בהצלחה!', 'success');
+      await refreshStatus();
+      if (!token) {
+        toast('כעת לחץ "חבר עכשיו" לאישור OAuth', 'info', 5000);
+      }
+    } else {
+      toast('שגיאה בשמירה: ' + data.error, 'error');
+    }
+  } catch { toast('שגיאת תקשורת', 'error'); }
 }
 
 // ── Google Calendar Connect ────────────────────────────────────────────────────
