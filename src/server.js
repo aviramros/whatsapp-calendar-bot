@@ -1,13 +1,23 @@
 import 'dotenv/config';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 
-// Decode Google credentials from env var (for cloud deployments)
-if (process.env.GOOGLE_OAUTH_BASE64) {
-  const credsPath = process.env.GOOGLE_CREDENTIALS_PATH || './credentials/google-oauth.json';
-  mkdirSync(new URL('../credentials', import.meta.url).pathname, { recursive: true });
-  if (!existsSync(credsPath)) {
-    writeFileSync(credsPath, Buffer.from(process.env.GOOGLE_OAUTH_BASE64, 'base64').toString('utf8'));
-    console.log('[Server] Google credentials written from env var');
+// Decode Google credentials from env vars (for cloud deployments)
+{
+  const credDir = new URL('../credentials', import.meta.url).pathname;
+  mkdirSync(credDir, { recursive: true });
+  if (process.env.GOOGLE_OAUTH_BASE64) {
+    const p = process.env.GOOGLE_CREDENTIALS_PATH || './credentials/google-oauth.json';
+    if (!existsSync(p)) {
+      writeFileSync(p, Buffer.from(process.env.GOOGLE_OAUTH_BASE64, 'base64').toString('utf8'));
+      console.log('[Server] Google OAuth credentials written from env var');
+    }
+  }
+  if (process.env.GOOGLE_TOKEN_BASE64) {
+    const p = process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json';
+    if (!existsSync(p)) {
+      writeFileSync(p, Buffer.from(process.env.GOOGLE_TOKEN_BASE64, 'base64').toString('utf8'));
+      console.log('[Server] Google token written from env var');
+    }
   }
 }
 
