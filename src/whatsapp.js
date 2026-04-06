@@ -34,7 +34,7 @@ export function getClient() {
 
 export function initWhatsApp() {
   client = new Client({
-    authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
+    authStrategy: new LocalAuth({ dataPath: process.env.WWEBJS_AUTH_PATH || './.wwebjs_auth' }),
     puppeteer: {
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
         || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
