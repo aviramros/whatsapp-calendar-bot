@@ -14,10 +14,8 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
   }
   if (process.env.GOOGLE_TOKEN_BASE64) {
     const p = process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json';
-    if (!existsSync(p)) {
-      writeFileSync(p, Buffer.from(process.env.GOOGLE_TOKEN_BASE64, 'base64').toString('utf8'));
-      console.log('[Server] Google token written from env var');
-    }
+    writeFileSync(p, Buffer.from(process.env.GOOGLE_TOKEN_BASE64, 'base64').toString('utf8'));
+    console.log('[Server] Google token written from env var →', p);
   }
 }
 

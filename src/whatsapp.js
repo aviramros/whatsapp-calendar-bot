@@ -1,6 +1,7 @@
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import { EventEmitter } from 'events';
+import { unlinkSync, existsSync } from 'fs';
 import { getConfig } from './config.js';
 import 'dotenv/config';
 
@@ -33,6 +34,13 @@ export function getClient() {
 }
 
 export function initWhatsApp() {
+  // Remove Chromium lock files to prevent "profile in use" error after restart
+  const authPath = process.env.WWEBJS_AUTH_PATH || './.wwebjs_auth';
+  for (const lock of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    const p = `${authPath}/session/${lock}`;
+    try { if (existsSync(p)) unlinkSync(p); } catch {}
+  }
+
   client = new Client({
     authStrategy: new LocalAuth({ dataPath: process.env.WWEBJS_AUTH_PATH || './.wwebjs_auth' }),
     puppeteer: {
