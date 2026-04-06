@@ -53,9 +53,10 @@ try {
   execSync(`lsof -ti:${PORT} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
 } catch (_) {}
 
-// Clean up WhatsApp session lock if leftover
+// Clean up stale Chromium lock files from previous container (persistent volume)
 try {
-  execSync(`rm -f .wwebjs_auth/session/SingletonLock .wwebjs_auth/session/SingletonCookie`, { stdio: 'ignore' });
+  const wauthPath = process.env.WWEBJS_AUTH_PATH || './.wwebjs_auth';
+  execSync(`find "${wauthPath}" \\( -name "SingletonLock" -o -name "SingletonCookie" -o -name "SingletonSocket" \\) -delete 2>/dev/null || true`, { stdio: 'ignore' });
 } catch (_) {}
 
 app.use(express.json());
