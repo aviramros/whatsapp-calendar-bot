@@ -233,19 +233,6 @@ app.get('/status', (req, res) => {
   });
 });
 
-// ── Google Calendar OAuth via UI ───────────────────────────────────────────────
-app.get('/auth/google/start', (req, res) => {
-  try {
-    const authUrl = startGoogleAuthFlow(() => {
-      broadcast('google-auth', { authenticated: true });
-      log('[Auth] Google Calendar connected successfully ✅');
-    });
-    res.json({ authUrl });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
-
 // ── Bot On/Off ─────────────────────────────────────────────────────────────────
 app.post('/bot/start', (req, res) => {
   startWhatsApp();
