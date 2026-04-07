@@ -47,8 +47,25 @@ export function initWhatsApp() {
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
         || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       headless: true,
-      protocolTimeout: 300000,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      protocolTimeout: 120000,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-accelerated-2d-canvas',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-sync',
+        '--disable-translate',
+        '--disable-default-apps',
+        '--mute-audio',
+        '--renderer-process-limit=1',
+        '--js-flags=--max_old_space_size=256',
+      ],
     },
   });
 
