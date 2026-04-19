@@ -20,6 +20,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 }
 
 import express from 'express';
+import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execSync } from 'child_process';
@@ -47,6 +48,9 @@ import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentSchedule
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Allow cross-origin requests from the Vercel-hosted frontend (or any origin if not set)
+app.use(cors({ origin: process.env.FRONTEND_ORIGIN || '*', credentials: false }));
 
 // Kill any process already using our port before starting
 try {

@@ -718,6 +718,9 @@
 </div><!-- end #main -->
 
 <script>
+// ── API base URL (override window._API_BASE to point at a remote backend) ─────
+const API_BASE = (typeof window._API_BASE !== 'undefined') ? window._API_BASE : '';
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 const TOAST_ICONS = { success:'✅', error:'❌', info:'ℹ️', warning:'⚠️' };
 function toast(msg, type = 'success', duration = 3500) {
@@ -760,7 +763,7 @@ let qrPolling = null;
 
 async function refreshStatus() {
   try {
-    const s = await fetch('/status').then(r => r.json());
+    const s = await fetch(`${API_BASE}/status`).then(r => r.json());
     const botToggle = document.getElementById('bot-toggle');
     if (botToggle && s.botEnabled !== undefined) botToggle.checked = s.botEnabled;
 
@@ -801,7 +804,7 @@ function startQrPolling() { if (qrPolling) return; fetchQr(); qrPolling = setInt
 function stopQrPolling()  { if (qrPolling) { clearInterval(qrPolling); qrPolling = null; } }
 async function fetchQr() {
   try {
-    const r = await fetch('/qr'); if (!r.ok) return;
+    const r = await fetch(`${API_BASE}/qr`); if (!r.ok) return;
     const { qr } = await r.json();
     document.getElementById('qr-img').src = qr;
     document.getElementById('qr-section').classList.remove('hidden');
@@ -815,7 +818,7 @@ async function triggerSync() {
   document.getElementById('result-box').style.display = 'none';
   toast('סנכרון התחיל...', 'info', 2000);
   try {
-    const { results } = await fetch('/trigger', { method: 'POST' }).then(r => r.json());
+    const { results } = await fetch(`${API_BASE}/trigger`, { method: 'POST' }).then(r => r.json());
     showResults(results); refreshStatus();
     if (results.created.length > 0)
       toast(`נוצרו ${results.created.length} אירועים חדשים ✨`, 'success');
@@ -862,7 +865,7 @@ function logClass(t) {
   if (t.includes('[WhatsApp]')) return 'wa';
   return '';
 }
-const es = new EventSource('/events');
+const es = new EventSource(`${API_BASE}/events`);
 es.onmessage = e => {
   const { type, data } = JSON.parse(e.data);
   if (type === 'log') appendLog(data, logClass(data));
@@ -918,7 +921,7 @@ function calNav(dir) {
 
 async function loadCalendar() {
   try {
-    const { events } = await fetch('/calendar-events').then(r => r.json());
+    const { events } = await fetch(`${API_BASE}/calendar-events`).then(r => r.json());
     calEventsCache = events || [];
   } catch { calEventsCache = []; }
   renderCalendar();
@@ -1066,7 +1069,7 @@ function toggleSummarySection(enabled) {
 async function sendTestMessage() {
   toast('שולח הודעת בדיקה...', 'info', 2000);
   try {
-    const res = await fetch('/test-message', { method: 'POST' }).then(r => r.json());
+    const res = await fetch(`${API_BASE}/test-message`, { method: 'POST' }).then(r => r.json());
     if (res.ok) toast(`הודעת בדיקה נשלחה ל-${res.recipient}`, 'success');
     else toast('שליחה נכשלה — בדוק שWhatsApp מחובר', 'error');
   } catch { toast('שגיאה בשליחה', 'error'); }
@@ -1077,7 +1080,7 @@ let excelParsedTasks = [];
 let excelGroupMap = {};
 
 async function initExcelTab() {
-  excelGroupMap = await fetch('/excel/group-map').then(r => r.json()).catch(() => ({}));
+  excelGroupMap = await fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({}));
   renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
 }
 
@@ -1105,7 +1108,7 @@ async function parseExcelFile() {
   try {
     const fd = new FormData();
     fd.append('file', input.files[0]);
-    const res = await fetch('/excel/parse', { method: 'POST', body: fd });
+    const res = await fetch(`${API_BASE}/excel/parse`, { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'שגיאה בניתוח');
     excelParsedTasks = data.tasks;
@@ -1138,7 +1141,7 @@ async function saveGroupMap() {
   const map = {};
   inputs.forEach(inp => { map[inp.dataset.excelGroup] = inp.value.trim(); });
   excelGroupMap = map;
-  await fetch('/excel/group-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
+  await fetch(`${API_BASE}/excel/group-map`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
   const fb = document.getElementById('map-saved-feedback');
   fb.style.display = 'inline'; setTimeout(() => fb.style.display = 'none', 2000);
   if (excelParsedTasks.length) {
@@ -1183,7 +1186,7 @@ async function resendTask(index, btn) {
   chip.className = 'chip chip-sending';
   chip.textContent = 'שולח...';
   try {
-    const res = await fetch('/excel/resend', {
+    const res = await fetch(`${API_BASE}/excel/resend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task })
@@ -1213,7 +1216,7 @@ async function dispatchExcel() {
   btn.disabled = true; btn.textContent = 'שולח...';
   try {
     const toSend = excelParsedTasks.filter(t => t.willSend && !t.alreadySent);
-    const res = await fetch('/excel/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: toSend }) });
+    const res = await fetch(`${API_BASE}/excel/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: toSend }) });
     const data = await res.json();
     const resultsEl = document.getElementById('excel-results');
     let html = '';
@@ -1247,7 +1250,7 @@ async function toggleBot(enabled) {
   const toggle = document.getElementById('bot-toggle');
   toggle.disabled = true;
   try {
-    await fetch(enabled ? '/bot/start' : '/bot/stop', { method: 'POST' });
+    await fetch(enabled ? `${API_BASE}/bot/start` : `${API_BASE}/bot/stop`, { method: 'POST' });
     await new Promise(r => setTimeout(r, 1500));
     await refreshStatus();
     toast(enabled ? 'הבוט הופעל ✅' : 'הבוט הופסק', enabled ? 'success' : 'warning');
@@ -1271,7 +1274,7 @@ async function saveCredentials() {
   } catch { toast('JSON לא תקין — בדוק שהעתקת נכון', 'error'); return; }
 
   try {
-    const res = await fetch('/config/google-credentials', {
+    const res = await fetch(`${API_BASE}/config/google-credentials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oauth, token: token || null })
@@ -1295,13 +1298,13 @@ async function connectGoogle() {
   const btn = document.getElementById('gc-connect-btn');
   btn.textContent = '⏳ מתחבר...'; btn.disabled = true;
   try {
-    const { authUrl, error } = await fetch('/auth/google/start').then(r => r.json());
+    const { authUrl, error } = await fetch(`${API_BASE}/auth/google/start`).then(r => r.json());
     if (error) { btn.textContent = '❌ שגיאה'; btn.disabled = false; toast('שגיאה בחיבור Google', 'error'); return; }
     window.open(authUrl, '_blank');
     btn.textContent = '⏳ ממתין לאישור...';
     toast('נפתח חלון התחברות Google — אשר גישה', 'info', 5000);
     const poll = setInterval(async () => {
-      const s = await fetch('/status').then(r => r.json());
+      const s = await fetch(`${API_BASE}/status`).then(r => r.json());
       if (s.googleAuthenticated) {
         clearInterval(poll);
         await refreshStatus();
@@ -1367,7 +1370,7 @@ async function uploadLogo() {
   fd.append('logo', input.files[0]);
   fd.append('orientation', orientation);
   try {
-    const res = await fetch('/config/logo', { method: 'POST', body: fd });
+    const res = await fetch(`${API_BASE}/config/logo`, { method: 'POST', body: fd });
     const data = await res.json();
     if (data.ok) { showLogoPreview(data.logoData, orientation); toast('לוגו הועלה בהצלחה', 'success'); }
     else toast('שגיאה בהעלאת הלוגו', 'error');
@@ -1443,11 +1446,11 @@ function applyLogoSizeToSidebar(size, orientation) {
 async function saveLogoSize(val) {
   localStorage.setItem('logoSize', val);
   // Persist to server config too
-  try { await fetch('/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ logoSize: parseInt(val,10) }) }); } catch {}
+  try { await fetch(`${API_BASE}/config`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ logoSize: parseInt(val,10) }) }); } catch {}
 }
 
 async function removeLogo() {
-  await fetch('/config/logo', { method: 'DELETE' });
+  await fetch(`${API_BASE}/config/logo`, { method: 'DELETE' });
   document.getElementById('logo-preview-wrap').style.display = 'none';
   document.getElementById('logo-file-input').value = '';
   document.getElementById('logo-upload-area').style.borderColor = '';
@@ -1459,7 +1462,7 @@ async function removeLogo() {
 // ── Settings (extended) ───────────────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const cfg = await fetch('/config').then(r => r.json());
+    const cfg = await fetch(`${API_BASE}/config`).then(r => r.json());
     settingsGroups = [...cfg.groups];
     document.getElementById('sync-hours').value = cfg.syncWindowHours;
     document.getElementById('summary-recipient').value = cfg.summaryRecipient || '';
@@ -1502,7 +1505,7 @@ async function saveSettings() {
     themeColor: document.getElementById('theme-color-picker')?.value || '#3DBDB4',
   };
   try {
-    await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     document.getElementById('groups-label').textContent = 'קבוצות: ' + body.groups.join(' | ');
     toast('הגדרות נשמרו בהצלחה', 'success');
   } catch {
