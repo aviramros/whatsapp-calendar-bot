@@ -707,9 +707,14 @@
       <thead><tr><th>קבוצה</th><th>מטלה</th><th>תאריך</th><th>סטטוס</th></tr></thead>
       <tbody id="excel-preview-body"></tbody>
     </table>
-    <button class="btn btn-teal" style="width:100%;margin-top:16px;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel()">
-      שלח לכולם ויצור אירועי לוח שנה
-    </button>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
+      <button class="btn btn-teal" style="width:100%;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel()">
+        שלח לכולם ויצור אירועי לוח שנה
+      </button>
+      <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">
+        ↩ שלח הכל שוב
+      </button>
+    </div>
   </div>
 
   <div class="excel-results" id="excel-results"></div>
@@ -1178,6 +1183,8 @@ function renderExcelPreview(tasks) {
     </tr>`;
   }).join('');
   document.getElementById('dispatch-btn').disabled = willSend === 0;
+  const resendAllBtn = document.getElementById('resend-all-btn');
+  if (resendAllBtn) resendAllBtn.style.display = alreadySent > 0 ? '' : 'none';
 }
 
 async function resendTask(index, btn) {
@@ -1211,6 +1218,53 @@ async function resendTask(index, btn) {
     btn.disabled = false;
     toast('שגיאה בשליחה חוזרת', 'error');
   }
+}
+
+async function resendAll() {
+  const btn = document.getElementById('resend-all-btn');
+  const tasks = excelParsedTasks.filter(t => t.willSend);
+  if (!tasks.length) return;
+  btn.disabled = true;
+  btn.textContent = `↩ שולח... (0/${tasks.length})`;
+
+  let sent = 0, failed = 0;
+  for (let i = 0; i < excelParsedTasks.length; i++) {
+    const task = excelParsedTasks[i];
+    if (!task.willSend) continue;
+    const chip = document.getElementById(`task-chip-${i}`);
+    const resendBtnEl = document.querySelector(`[onclick="resendTask(${i}, this)"]`);
+    if (chip) { chip.className = 'chip chip-sending'; chip.textContent = 'שולח...'; }
+    if (resendBtnEl) resendBtnEl.disabled = true;
+    try {
+      const res = await fetch(`${API_BASE}/excel/resend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        if (chip) { chip.className = 'chip chip-resent'; chip.textContent = data.whatsappSent ? '✅ נשלח' : '📅 יומן בלבד'; }
+        if (resendBtnEl) resendBtnEl.remove();
+        excelParsedTasks[i] = { ...task, alreadySent: true };
+        sent++;
+      } else {
+        if (chip) { chip.className = 'chip chip-skip'; chip.textContent = 'שגיאה'; }
+        if (resendBtnEl) resendBtnEl.disabled = false;
+        failed++;
+      }
+    } catch {
+      if (chip) { chip.className = 'chip chip-skip'; chip.textContent = 'שגיאה'; }
+      if (resendBtnEl) resendBtnEl.disabled = false;
+      failed++;
+    }
+    btn.textContent = `↩ שולח... (${sent + failed}/${tasks.length})`;
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  btn.disabled = false;
+  btn.textContent = '↩ שלח הכל שוב';
+  if (failed === 0) toast(`נשלחו ${sent} משימות מחדש ✅`, 'success');
+  else toast(`נשלחו ${sent}, נכשלו ${failed}`, failed > 0 ? 'warning' : 'success');
 }
 
 async function dispatchExcel() {
