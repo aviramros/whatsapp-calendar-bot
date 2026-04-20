@@ -26,7 +26,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import QRCode from 'qrcode';
 
-import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled } from './whatsapp.js';
+import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
 import { getConfig, saveConfig, getGroupMap, saveGroupMap } from './config.js';
@@ -236,6 +236,7 @@ app.get('/status', (req, res) => {
     qrAvailable: wa.qrAvailable,
     googleAuthenticated: isGoogleAuthenticated(),
     botEnabled: isBotEnabled(),
+    botPhoneNumber: getBotPhoneNumber(),
     lastRun,
     totalEventsCreated,
     lastSyncResults,

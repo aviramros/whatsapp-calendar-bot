@@ -34,6 +34,14 @@ export function getClient() {
   return client;
 }
 
+export function getBotPhoneNumber() {
+  try {
+    return client?.info?.wid?.user || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 export function initWhatsApp() {
   // Remove ALL stale Chromium lock files recursively (handles any session-* subdir)
   const authPath = process.env.WWEBJS_AUTH_PATH || './.wwebjs_auth';
@@ -240,10 +248,16 @@ export async function sendWhatsAppMessage(recipient, text) {
       await client.sendMessage(cachedId, text);
       return true;
     }
-    // Otherwise treat as phone number
-    const numberId = await client.getNumberId(recipient.replace(/^\+/, ''));
-    if (!numberId) { log(`Recipient not found: ${recipient}`); return false; }
-    await client.sendMessage(numberId._serialized, text);
+    // Otherwise treat as phone number — try getNumberId first, fall back to @c.us direct
+    const bare = recipient.replace(/^\+/, '').replace(/\D/g, '');
+    let chatId;
+    try {
+      const numberId = await client.getNumberId(bare);
+      chatId = numberId ? numberId._serialized : `${bare}@c.us`;
+    } catch (_) {
+      chatId = `${bare}@c.us`;
+    }
+    await client.sendMessage(chatId, text);
     return true;
   } catch (err) {
     log('Error sending message: ' + err.message);
