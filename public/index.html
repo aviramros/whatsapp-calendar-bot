@@ -581,7 +581,7 @@
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0;flex:1">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        סיכום שבועי ב-WhatsApp
+        תזכורת משימות יומית ב-WhatsApp
       </div>
       <label class="toggle-switch">
         <input type="checkbox" id="summary-enabled" onchange="toggleSummarySection(this.checked)">
@@ -589,12 +589,13 @@
       </label>
     </div>
     <div id="summary-body" style="transition:opacity .3s">
+      <p style="font-size:.84rem;color:var(--muted);margin-bottom:14px">כל יום בשעה שתגדיר, יישלחו אוטומטית המשימות של המחרת למספר הטלפון הנבחר.</p>
       <div class="settings-group">
-        <label>מספר טלפון (עם קידומת מדינה, לדוגמא 972501234567)</label>
+        <label>שלח אל (מספר טלפון עם קידומת מדינה, לדוגמא 972501234567)</label>
         <input type="text" id="summary-recipient" placeholder="972501234567" />
       </div>
       <div class="settings-group">
-        <label>שעת שליחת הסיכום (לדוגמא 07:30 או 21:15)</label>
+        <label>שעת שליחה (לדוגמא 07:30 או 21:15)</label>
         <input type="time" id="summary-time" style="max-width:160px;padding:8px;border-radius:8px;border:1px solid var(--border);font-size:.93rem;direction:ltr" />
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
@@ -682,6 +683,12 @@
 
 <!-- ══════════════════ EXCEL ══════════════════ -->
 <div id="tab-excel" class="page">
+
+  <div id="saved-plan-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:9px 14px;font-size:.87rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span id="saved-plan-badge-text"></span>
+    <span style="margin-right:auto;font-size:.78rem;font-weight:400;opacity:.7">תזכורת יומית פעילה</span>
+  </div>
 
   <div class="card">
     <div class="card-title">
@@ -1158,6 +1165,7 @@ let excelGroupMap = {};
 async function initExcelTab() {
   excelGroupMap = await fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({}));
   renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
+  updateSavedPlanBadge(null);
 }
 
 function onExcelFileSelected() {
@@ -1194,10 +1202,39 @@ async function parseExcelFile() {
     document.getElementById('excel-week-label').textContent = data.weekLabel;
     renderExcelPreview(data.tasks);
     document.getElementById('excel-preview-card').style.display = 'block';
+
+    // Auto-save plan to server for daily tomorrow-tasks reminder
+    await savePlanToServer(data.weekLabel, data.tasks);
   } catch (err) {
     document.getElementById('excel-file-status').textContent = `❌ ${err.message}`;
   } finally {
     btn.disabled = false; btn.textContent = 'נתח קובץ';
+  }
+}
+
+async function savePlanToServer(weekLabel, tasks) {
+  try {
+    // Only save tasks that have a whatsappGroup mapping
+    const toSave = tasks.filter(t => t.whatsappGroup);
+    await fetch(`${API_BASE}/excel/save-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekLabel, tasks: toSave })
+    });
+    updateSavedPlanBadge(weekLabel);
+  } catch {}
+}
+
+async function updateSavedPlanBadge(weekLabel) {
+  const badge = document.getElementById('saved-plan-badge');
+  const textEl = document.getElementById('saved-plan-badge-text');
+  if (!badge || !textEl) return;
+  const label = weekLabel || (await fetch(`${API_BASE}/excel/saved-plan`).then(r => r.json()).then(p => p.weekLabel).catch(() => null));
+  if (label) {
+    textEl.textContent = `תכנית שמורה: ${label}`;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
@@ -1358,6 +1395,9 @@ async function dispatchExcel() {
     resultsEl.innerHTML = html; resultsEl.style.display = 'block';
     excelParsedTasks = excelParsedTasks.map(t => ({ ...t, alreadySent: t.alreadySent || (t.willSend && !t.alreadySent) }));
     renderExcelPreview(excelParsedTasks);
+    // Re-save plan after dispatch (whatsappGroup may have been updated)
+    const weekLabel = document.getElementById('excel-week-label').textContent;
+    await savePlanToServer(weekLabel, excelParsedTasks);
   } catch (err) {
     const r = document.getElementById('excel-results');
     r.innerHTML = `<div class="errors">❌ ${esc(err.message)}</div>`; r.style.display = 'block';

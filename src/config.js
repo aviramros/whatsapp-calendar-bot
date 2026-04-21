@@ -3,6 +3,7 @@ import { dirname } from 'path';
 
 const CONFIG_PATH = './data/config.json';
 const GROUP_MAP_PATH = './data/excel-group-map.json';
+const WEEKLY_PLAN_PATH = './data/weekly-plan.json';
 
 const DEFAULTS = {
   groups: ['השקיה', 'עבודות בית', 'ריסוסים'],
@@ -41,4 +42,15 @@ export function getGroupMap() {
 export function saveGroupMap(map) {
   mkdirSync(dirname(GROUP_MAP_PATH), { recursive: true });
   writeFileSync(GROUP_MAP_PATH, JSON.stringify(map, null, 2));
+}
+
+export function getWeeklyPlan() {
+  if (!existsSync(WEEKLY_PLAN_PATH)) return null;
+  try { return JSON.parse(readFileSync(WEEKLY_PLAN_PATH, 'utf8')); }
+  catch { return null; }
+}
+
+export function saveWeeklyPlan(plan) {
+  mkdirSync(dirname(WEEKLY_PLAN_PATH), { recursive: true });
+  writeFileSync(WEEKLY_PLAN_PATH, JSON.stringify(plan, null, 2));
 }

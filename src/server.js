@@ -29,7 +29,7 @@ import QRCode from 'qrcode';
 import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
-import { getConfig, saveConfig, getGroupMap, saveGroupMap } from './config.js';
+import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan } from './config.js';
 import { parseExcelPlan } from './excel.js';
 import multer from 'multer';
 import {
@@ -144,25 +144,67 @@ export async function runSync() {
   lastSyncResults = results;
   broadcast('syncComplete', results);
 
-  // Send weekly summary if configured
-  if (config.summaryRecipient && config.summaryEnabled !== false) {
-    try {
-      const weekEvents = await fetchWeekEvents(auth, config.groups);
-      let msg;
-      if (weekEvents.length > 0) {
-        const lines = weekEvents.map(e => `✅ ${e.title}`);
-        msg = `📋 סיכום שבועי:\n${lines.join('\n')}`;
-      } else {
-        msg = `📋 סיכום שבועי:\nאין משימות השבוע.`;
-      }
-      const sent = await sendWhatsAppMessage(config.summaryRecipient, msg);
-      log(`[Sync] Summary ${sent ? 'sent ✅' : 'failed ❌'} to ${config.summaryRecipient}`);
-    } catch (err) {
-      log(`[Sync] Summary error: ${err.message}`);
-    }
-  }
+  // Send tomorrow's tasks reminder
+  await sendTomorrowTasks();
 
   return results;
+}
+
+// ─── Tomorrow tasks reminder ──────────────────────────────────────────────────
+
+const HE_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+function getTomorrowISO() {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+  now.setDate(now.getDate() + 1);
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getHebrewDayName(isoDate) {
+  const d = new Date(isoDate + 'T12:00:00');
+  return 'יום ' + HE_DAYS[d.getDay()];
+}
+
+export async function sendTomorrowTasks() {
+  const config = getConfig();
+  if (!config.summaryRecipient || config.summaryEnabled === false) return;
+
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) {
+    log('[Tomorrow] No weekly plan saved — skipping daily reminder');
+    return;
+  }
+
+  const tomorrow = getTomorrowISO();
+  const tasks = plan.tasks.filter(t => t.dateISO === tomorrow && t.whatsappGroup);
+
+  if (tasks.length === 0) {
+    log(`[Tomorrow] No tasks for ${tomorrow} — skipping reminder`);
+    return;
+  }
+
+  // Group tasks by whatsappGroup
+  const byGroup = {};
+  for (const t of tasks) {
+    if (!byGroup[t.whatsappGroup]) byGroup[t.whatsappGroup] = [];
+    byGroup[t.whatsappGroup].push(t.taskText);
+  }
+
+  const dateLabel = tasks[0].dateLabel;
+  const dayName = getHebrewDayName(tomorrow);
+  let msg = `📋 משימות למחר — ${dayName} ${dateLabel}:\n\n`;
+  for (const [group, groupTasks] of Object.entries(byGroup)) {
+    msg += `*${group}:*\n`;
+    groupTasks.forEach(t => { msg += `• ${t}\n`; });
+    msg += '\n';
+  }
+
+  const sent = await sendWhatsAppMessage(config.summaryRecipient, msg.trim());
+  log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${config.summaryRecipient} — ${tasks.length} tasks for ${tomorrow}`);
+  broadcast('log', `[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} — ${tasks.length} tasks`);
 }
 
 // ─── Express routes ───────────────────────────────────────────────────────────
@@ -350,6 +392,20 @@ app.get('/calendar-events', async (req, res) => {
 });
 
 // ─── Excel routes ─────────────────────────────────────────────────────────────
+
+// Weekly plan persistence (for daily tomorrow-tasks reminder)
+app.post('/excel/save-plan', (req, res) => {
+  const { weekLabel, tasks } = req.body;
+  if (!Array.isArray(tasks)) return res.status(400).json({ ok: false, error: 'tasks missing' });
+  saveWeeklyPlan({ weekLabel, tasks, savedAt: new Date().toISOString() });
+  log(`[Plan] Weekly plan saved: ${tasks.length} tasks (${weekLabel})`);
+  res.json({ ok: true, count: tasks.length });
+});
+
+app.get('/excel/saved-plan', (req, res) => {
+  const plan = getWeeklyPlan();
+  res.json(plan || { tasks: [], weekLabel: null, savedAt: null });
+});
 
 app.get('/excel/group-map', (req, res) => res.json(getGroupMap()));
 
