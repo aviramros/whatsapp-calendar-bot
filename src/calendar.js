@@ -83,21 +83,23 @@ export async function getOrCreateCalendar(auth, calendarName, calendarIdMap) {
 export async function createAllDayEvent(auth, calendarId, title, dateISO) {
   const calendar = google.calendar({ version: 'v3', auth });
 
-  // Check for existing event with same title on the same date
-  const dayStart = `${dateISO}T00:00:00Z`;
-  const dayEnd   = `${dateISO}T23:59:59Z`;
+  // Query a 3-day window to safely catch all-day events regardless of timezone offset
+  const d = new Date(dateISO + 'T12:00:00Z');
+  const dayBefore = new Date(d); dayBefore.setDate(d.getDate() - 1);
+  const dayAfter  = new Date(d); dayAfter.setDate(d.getDate() + 2);
+
   const existing = await calendar.events.list({
     calendarId,
-    timeMin: dayStart,
-    timeMax: dayEnd,
-    q: title,
+    timeMin: dayBefore.toISOString(),
+    timeMax: dayAfter.toISOString(),
     singleEvents: true,
-    maxResults: 10,
+    maxResults: 100,
   });
 
-  const duplicate = (existing.data.items || []).some(
-    ev => (ev.summary || '').trim() === title.trim()
-  );
+  const duplicate = (existing.data.items || []).some(ev => {
+    const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
+    return evDate === dateISO && (ev.summary || '').trim() === title.trim();
+  });
   if (duplicate) return false;
 
   await calendar.events.insert({
