@@ -186,21 +186,10 @@ export async function sendTomorrowTasks() {
     return;
   }
 
-  // Group tasks by whatsappGroup
-  const byGroup = {};
-  for (const t of tasks) {
-    if (!byGroup[t.whatsappGroup]) byGroup[t.whatsappGroup] = [];
-    byGroup[t.whatsappGroup].push(t.taskText);
-  }
-
   const dateLabel = tasks[0].dateLabel;
   const dayName = getHebrewDayName(tomorrow);
   let msg = `📋 משימות למחר — ${dayName} ${dateLabel}:\n\n`;
-  for (const [group, groupTasks] of Object.entries(byGroup)) {
-    msg += `*${group}:*\n`;
-    groupTasks.forEach(t => { msg += `• ${t}\n`; });
-    msg += '\n';
-  }
+  tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
 
   const sent = await sendWhatsAppMessage(config.summaryRecipient, msg.trim());
   log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${config.summaryRecipient} — ${tasks.length} tasks for ${tomorrow}`);
