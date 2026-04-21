@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, statSync } from 'fs';
 
 // Decode Google credentials from env vars (for cloud deployments)
 {
@@ -76,6 +76,27 @@ state.purgeOld();
 let lastRun = null;
 let lastSyncResults = null;
 let totalEventsCreated = 0;
+
+// ─── Token age helper ─────────────────────────────────────────────────────────
+/**
+ * Returns how many days ago the Google refresh token was last authorized.
+ * Uses the `authorized_at` field in the token JSON (set on OAuth callback),
+ * falling back to the file modification time.
+ */
+function getTokenAgeDays() {
+  const tokenPath = process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json';
+  try {
+    if (!existsSync(tokenPath)) return null;
+    const token = JSON.parse(readFileSync(tokenPath, 'utf8'));
+    if (token.authorized_at) {
+      return (Date.now() - token.authorized_at) / (1000 * 60 * 60 * 24);
+    }
+    // fallback: file mtime (less reliable if overwritten by env-var bootstrap)
+    return (Date.now() - statSync(tokenPath).mtimeMs) / (1000 * 60 * 60 * 24);
+  } catch {
+    return null;
+  }
+}
 
 const sseClients = [];
 
@@ -260,7 +281,9 @@ app.get('/auth/google/callback', async (req, res) => {
   try {
     const oAuth2Client = createOAuthClient(getBaseUrl(req) + '/auth/google/callback');
     const { tokens } = await oAuth2Client.getToken(code);
-    writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', JSON.stringify(tokens, null, 2));
+    // Stamp when the refresh token was issued so we can warn before 7-day expiry (Testing mode)
+    const tokenWithMeta = { ...tokens, authorized_at: Date.now() };
+    writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', JSON.stringify(tokenWithMeta, null, 2));
     broadcast('google-auth', { authenticated: true });
     res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:60px;direction:rtl">
       <h2>✅ Google Calendar מחובר בהצלחה!</h2>
@@ -280,6 +303,7 @@ app.get('/status', (req, res) => {
     googleAuthenticated: isGoogleAuthenticated(),
     botEnabled: isBotEnabled(),
     botPhoneNumber: getBotPhoneNumber(),
+    tokenAgeDays: getTokenAgeDays(),
     lastRun,
     totalEventsCreated,
     lastSyncResults,
@@ -359,8 +383,10 @@ app.post('/config/google-credentials', (req, res) => {
     mkdirSync(credDir, { recursive: true });
     writeFileSync(process.env.GOOGLE_CREDENTIALS_PATH || './credentials/google-oauth.json', oauth);
     if (token) {
-      JSON.parse(token);
-      writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', token);
+      const tokenObj = JSON.parse(token);
+      // Stamp authorized_at so the token-age warning works correctly
+      if (!tokenObj.authorized_at) tokenObj.authorized_at = Date.now();
+      writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', JSON.stringify(tokenObj, null, 2));
     }
     res.json({ ok: true });
   } catch (err) {

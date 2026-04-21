@@ -332,6 +332,21 @@
       cursor: pointer; font-weight: 500;
     }
 
+    /* ── Token expiry warning badge ── */
+    #gc-token-warning {
+      display: none;
+      padding: 3px 9px;
+      border-radius: 8px;
+      font-size: .77rem;
+      font-weight: 600;
+      margin-right: 8px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    #gc-token-warning.warn  { background: #fef3c7; color: #92400e; }
+    #gc-token-warning.crit  { background: #fee2e2; color: #991b1b; animation: pulse .9s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity:1; } to { opacity:.6; } }
+
     /* ── Sticky sidebar ── */
     #sidebar {
       position: sticky;
@@ -483,6 +498,7 @@
       <div class="status-row">
         <div class="dot" id="gc-dot"></div>
         <span id="gc-label">Google Calendar: בודק...</span>
+        <span id="gc-token-warning" onclick="connectGoogle()" title="לחץ לחידוש טוקן"></span>
         <button id="gc-connect-btn" onclick="connectGoogle()">חבר עכשיו</button>
         <button onclick="openCredentialsModal()" style="margin-right:6px;font-size:.8rem;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;color:var(--muted)">⚙️ הגדרה ידנית</button>
       </div>
@@ -873,12 +889,28 @@ async function refreshStatus() {
     const gcDot = document.getElementById('gc-dot');
     const gcLabel = document.getElementById('gc-label');
     const gcBtn = document.getElementById('gc-connect-btn');
+    const gcTokenWarn = document.getElementById('gc-token-warning');
     if (s.googleAuthenticated) {
       gcDot.className = 'dot green'; gcLabel.textContent = 'Google Calendar: מחובר';
       if (gcBtn) gcBtn.style.display = 'none';
     } else {
       gcDot.className = 'dot red'; gcLabel.textContent = 'Google Calendar: לא מחובר';
       if (gcBtn) gcBtn.style.display = 'inline-block';
+    }
+    // Token-age warning badge (relevant when Google Cloud app is in Testing mode → 7-day refresh token limit)
+    if (gcTokenWarn) {
+      const age = s.tokenAgeDays;
+      if (s.googleAuthenticated && age != null && age > 5) {
+        const daysLeft = Math.max(0, Math.round(7 - age));
+        const isCrit = daysLeft <= 1;
+        gcTokenWarn.className = isCrit ? 'crit' : 'warn';
+        gcTokenWarn.textContent = isCrit
+          ? (daysLeft === 0 ? '🔴 טוקן פג — חדש עכשיו' : '🔴 טוקן פג מחר — חדש עכשיו')
+          : `⚠️ טוקן פג בעוד ${daysLeft} ימים — לחץ לחידוש`;
+        gcTokenWarn.style.display = 'inline';
+      } else {
+        gcTokenWarn.style.display = 'none';
+      }
     }
 
     if (s.lastRun) {
