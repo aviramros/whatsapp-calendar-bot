@@ -618,20 +618,19 @@
       <h2 id="cal-title"></h2>
       <div style="display:flex;gap:8px;align-items:center">
         <div class="cal-view-toggle">
-          <button class="cal-view-btn active" id="view-btn-month" onclick="setCalView('month')">חודש</button>
-          <button class="cal-view-btn" id="view-btn-week"  onclick="setCalView('week')">שבוע</button>
+          <button class="cal-view-btn active" id="view-btn-week"  onclick="setCalView('week')">שבוע</button>
           <button class="cal-view-btn" id="view-btn-day"   onclick="setCalView('day')">יום</button>
         </div>
         <button class="btn btn-teal" onclick="loadCalendar()">רענן</button>
       </div>
     </div>
     <!-- Month view -->
-    <div id="cal-month-view">
+    <div id="cal-month-view" style="display:none">
       <div class="cal-grid" id="cal-day-names"></div>
       <div class="cal-grid" id="cal-cells"></div>
     </div>
     <!-- Week view -->
-    <div id="cal-week-view" style="display:none">
+    <div id="cal-week-view">
       <div class="week-grid" id="cal-week-grid"></div>
     </div>
     <!-- Day view -->
@@ -1096,7 +1095,7 @@ es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let calDay   = new Date().getDate();
-let calView  = 'month'; // 'month' | 'week' | 'day'
+let calView  = 'week'; // 'week' | 'day' (month removed)
 let calEventsCache = [];
 
 const DAY_NAMES_HE   = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
@@ -1115,8 +1114,9 @@ function calColor(cal) { return CAL_COLORS[cal] || CAL_COLORS.default; }
 function setCalView(v) {
   calView = v;
   ['month','week','day'].forEach(x => {
-    document.getElementById('view-btn-'+x).classList.toggle('active', x === v);
-    document.getElementById('cal-'+x+'-view').style.display = x === v ? '' : 'none';
+    document.getElementById('view-btn-'+x)?.classList.toggle('active', x === v);
+    const el = document.getElementById('cal-'+x+'-view');
+    if (el) el.style.display = x === v ? '' : 'none';
   });
   renderCalendar();
 }

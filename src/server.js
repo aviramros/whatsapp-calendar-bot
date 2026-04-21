@@ -76,6 +76,7 @@ state.purgeOld();
 let lastRun = null;
 let lastSyncResults = null;
 let totalEventsCreated = 0;
+let lastTokenWarnDate = null; // prevent duplicate warnings on same day
 
 // ─── Token age helper ─────────────────────────────────────────────────────────
 /**
@@ -119,6 +120,7 @@ export async function runSync() {
 
   // Always send tomorrow's tasks reminder — independent of Google auth
   await sendTomorrowTasks();
+  await checkAndWarnTokenExpiry();
 
   if (!isGoogleAuthenticated()) {
     const err = 'Google Calendar not authenticated. Run: npm run setup-auth';
@@ -169,6 +171,32 @@ export async function runSync() {
   broadcast('syncComplete', results);
 
   return results;
+}
+
+// ─── Token expiry WhatsApp warning ───────────────────────────────────────────
+
+async function checkAndWarnTokenExpiry() {
+  const ageDays = getTokenAgeDays();
+  if (ageDays == null || ageDays < 5) return; // well within 7-day window
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (lastTokenWarnDate === today) return; // already warned today
+
+  const config = getConfig();
+  if (!config.summaryRecipient) return;
+
+  const daysLeft = Math.max(0, Math.round(7 - ageDays));
+  const appUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+  const msg = daysLeft === 0
+    ? `🔴 *טוקן Google Calendar פג!*\nהבוט לא יכול לגשת ליומן.\nחדש את החיבור כאן:\n${appUrl}`
+    : `⚠️ *טוקן Google Calendar פג בעוד ${daysLeft} ${daysLeft === 1 ? 'יום' : 'ימים'}*\nחדש את החיבור לפני שיפסיק לעבוד:\n${appUrl}`;
+
+  const recipients = config.summaryRecipient.split(/[,;]/).map(r => r.trim()).filter(Boolean);
+  for (const r of recipients) {
+    await sendWhatsAppMessage(r, msg);
+  }
+  lastTokenWarnDate = today;
+  log(`[Token] Expiry warning sent — ${daysLeft} days left`);
 }
 
 // ─── Tomorrow tasks reminder ──────────────────────────────────────────────────
