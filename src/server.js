@@ -96,6 +96,9 @@ export async function runSync() {
   lastRun = new Date().toISOString();
   const config = getConfig();
 
+  // Always send tomorrow's tasks reminder — independent of Google auth
+  await sendTomorrowTasks();
+
   if (!isGoogleAuthenticated()) {
     const err = 'Google Calendar not authenticated. Run: npm run setup-auth';
     log('[Sync] ERROR: ' + err);
@@ -143,9 +146,6 @@ export async function runSync() {
   log(`[Sync] Done. Created: ${results.created.length}, Skipped: ${results.skipped.length}, Errors: ${results.errors.length}`);
   lastSyncResults = results;
   broadcast('syncComplete', results);
-
-  // Send tomorrow's tasks reminder
-  await sendTomorrowTasks();
 
   return results;
 }
