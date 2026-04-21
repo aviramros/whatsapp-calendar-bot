@@ -1950,10 +1950,12 @@ async function loadSettings() {
     document.getElementById('summary-time').value = `${h}:${m}`;
     const enabled = cfg.summaryEnabled !== false;
     document.getElementById('summary-enabled').checked = enabled;
-    // Restore logo size slider
+    // Restore logo size — sync server value → localStorage so applySidebarLogo reads correctly
     const savedSize = cfg.logoSize || parseInt(localStorage.getItem('logoSize') || '80', 10);
+    localStorage.setItem('logoSize', savedSize);
     const slider = document.getElementById('logo-size-slider');
     if (slider) { slider.value = savedSize; document.getElementById('logo-size-val').textContent = savedSize + 'px'; }
+    applyLogoSize(savedSize); // apply to preview image immediately
     toggleSummarySection(enabled);
     renderGroupTags();
     document.getElementById('groups-label').textContent = 'קבוצות: ' + cfg.groups.join(' | ');
