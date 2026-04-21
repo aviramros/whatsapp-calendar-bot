@@ -1,0 +1,386 @@
+{
+  "weekLabel": "19.4 - 25.4",
+  "tasks": [
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה כל הגזרים 18 קוב",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה כל הגזרים 18 קוב|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה תירס צפון בית + משלוש 4-5",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה תירס צפון בית + משלוש 4-5|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה בצל ברכות דרום 18 קוב",
+      "dateISO": "2026-04-21",
+      "dateLabel": "21.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה בצל ברכות דרום 18 קוב|2026-04-21",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה בצל ברכות צפון 18 קוב אחרי דישון",
+      "dateISO": "2026-04-22",
+      "dateLabel": "22.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה בצל ברכות צפון 18 קוב אחרי דישון|2026-04-22",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "כ10 קוב + דשן אורן 12 ליטר/ד(5N)",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|כ10 קוב + דשן אורן 12 ליטר/ד(5N)|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה תפו\"א (4 ימים) 18 קוב",
+      "dateISO": "2026-04-23",
+      "dateLabel": "23.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה תפו\"א (4 ימים) 18 קוב|2026-04-23",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה כל הגזרים 20 קוב",
+      "dateISO": "2026-04-24",
+      "dateLabel": "24.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה כל הגזרים 20 קוב|2026-04-24",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "המשך השקיה גזרים",
+      "dateISO": "2026-04-25",
+      "dateLabel": "25.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|המשך השקיה גזרים|2026-04-25",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה נוריות 20 קוב",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה נוריות 20 קוב|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה תירס 17 25 קוב",
+      "dateISO": "2026-04-21",
+      "dateLabel": "21.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה תירס 17 25 קוב|2026-04-21",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "עם הגמעה – דואט 150",
+      "dateISO": "2026-04-23",
+      "dateLabel": "23.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|עם הגמעה – דואט 150|2026-04-23",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה תירס 17 מערב אחרי ריסוס ודישון 10 קוב",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה תירס 17 מערב אחרי ריסוס ודישון 10 קוב|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "מניעה קישיון",
+      "dateISO": "2026-04-23",
+      "dateLabel": "23.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|מניעה קישיון|2026-04-23",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה תפוא 20 קוב",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה תפוא 20 קוב|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "השקיה נוריות 20 קוב",
+      "dateISO": "2026-04-23",
+      "dateLabel": "23.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|השקיה נוריות 20 קוב|2026-04-23",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "השקיה",
+      "taskText": "המשך השקיה נוירות",
+      "dateISO": "2026-04-24",
+      "dateLabel": "24.4",
+      "whatsappGroup": "השקיה",
+      "fingerprint": "השקיה|המשך השקיה נוירות|2026-04-24",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "ריסוסים",
+      "taskText": "ריסוס בצל ברכות דרום",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "ריסוסים",
+      "fingerprint": "ריסוסים|ריסוס בצל ברכות דרום|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "סטאר 200. נפח 20",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|סטאר 200. נפח 20|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "ריסוס תירס 17 מונעי הצצה",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|ריסוס תירס 17 מונעי הצצה|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "ריסוס כל הגזרים",
+      "dateISO": "2026-04-22",
+      "dateLabel": "22.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|ריסוס כל הגזרים|2026-04-22",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "ריסוס כל הגזרים מחלות",
+      "dateISO": "2026-04-23",
+      "dateLabel": "23.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|ריסוס כל הגזרים מחלות|2026-04-23",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "ריסוס כל הבצל מחלות",
+      "dateISO": "2026-04-24",
+      "dateLabel": "24.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|ריסוס כל הבצל מחלות|2026-04-24",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "בלאנס סמארט 30 + דואל גולד 140",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|בלאנס סמארט 30 + דואל גולד 140|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "ראונדאפ 15 – 6.3 ליטר. נפח 15",
+      "dateISO": "2026-04-22",
+      "dateLabel": "22.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|ראונדאפ 15 – 6.3 ליטר. נפח 15|2026-04-22",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "ריסוס בצל ברכות צפון. סטאר 200",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|ריסוס בצל ברכות צפון. סטאר 200|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "דישון בצל ברכות דרום 1.5 טון",
+      "dateISO": "2026-04-21",
+      "dateLabel": "21.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|דישון בצל ברכות דרום 1.5 טון|2026-04-21",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "דישון בצל ברכות צפון 1.5 טון",
+      "dateISO": "2026-04-22",
+      "dateLabel": "22.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|דישון בצל ברכות צפון 1.5 טון|2026-04-22",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "נפח 20",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|נפח 20|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "אוריאה – 11 ק\"ג/ד (5 יחידות)",
+      "dateISO": "2026-04-21",
+      "dateLabel": "21.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|אוריאה – 11 ק\"ג/ד (5 יחידות)|2026-04-21",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "דישונים",
+      "taskText": "אוריאה – 11 ק\"ג/ד (5 יחידות)",
+      "dateISO": "2026-04-22",
+      "dateLabel": "22.4",
+      "whatsappGroup": "דישונים",
+      "fingerprint": "דישונים|אוריאה – 11 ק\"ג/ד (5 יחידות)|2026-04-22",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "זריעת תירס 17 מערב.",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|זריעת תירס 17 מערב.|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "זן אולימפיון. 10 זרעים/מ. + ריסוס",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|זן אולימפיון. 10 זרעים/מ. + ריסוס|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "דישון אוריאה תירס 17 מערב",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|דישון אוריאה תירס 17 מערב|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "מעבר פסי מרסס גזר דרום בית",
+      "dateISO": "2026-04-21",
+      "dateLabel": "21.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|מעבר פסי מרסס גזר דרום בית|2026-04-21",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "זאוס 150 + אטלס 100",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|זאוס 150 + אטלס 100|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "2 טון – 14 ק\"ג/ד  (6.4 יחידות)",
+      "dateISO": "2026-04-20",
+      "dateLabel": "20.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|2 טון – 14 ק\"ג/ד  (6.4 יחידות)|2026-04-20",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "לקחת מנדב 2 טון אוריאה (אפשר לבקש שיביאו לחצר)",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|לקחת מנדב 2 טון אוריאה (אפשר לבקש שיביאו לחצר)|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    },
+    {
+      "excelGroup": "עבודות",
+      "taskText": "2 טון נוספים ישארו במשביר לתירס",
+      "dateISO": "2026-04-19",
+      "dateLabel": "19.4",
+      "whatsappGroup": "עבודות",
+      "fingerprint": "עבודות|2 טון נוספים ישארו במשביר לתירס|2026-04-19",
+      "willSend": true,
+      "alreadySent": true
+    }
+  ],
+  "savedAt": "2026-04-21T10:54:38.875Z"
+}

@@ -191,10 +191,21 @@ export async function sendTomorrowTasks() {
 
   let msg = `📋 משימות למחר — ${dayName} ${dateLabel}:\n\n`;
   tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+  msg = msg.trim();
 
-  const sent = await sendWhatsAppMessage(config.summaryRecipient, msg.trim());
-  log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${config.summaryRecipient} — ${tasks.length} tasks for ${tomorrow}`);
-  broadcast('log', `[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} — ${tasks.length} tasks`);
+  // Support multiple recipients separated by , or ;
+  const recipients = config.summaryRecipient
+    .split(/[,;]/)
+    .map(r => r.trim())
+    .filter(Boolean);
+
+  let sentCount = 0;
+  for (const recipient of recipients) {
+    const sent = await sendWhatsAppMessage(recipient, msg);
+    if (sent) sentCount++;
+    log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${recipient}`);
+  }
+  broadcast('log', `[Tomorrow] Reminder sent to ${sentCount}/${recipients.length} recipients — ${tasks.length} tasks`);
 }
 
 // ─── Express routes ───────────────────────────────────────────────────────────
