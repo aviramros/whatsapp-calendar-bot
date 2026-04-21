@@ -29,7 +29,7 @@ import QRCode from 'qrcode';
 import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
-import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks } from './config.js';
+import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview } from './config.js';
 import { parseExcelPlan } from './excel.js';
 import multer from 'multer';
 import {
@@ -497,9 +497,13 @@ app.get('/calendar-events', async (req, res) => {
 
 // Weekly plan persistence (for daily tomorrow-tasks reminder)
 app.post('/excel/save-plan', (req, res) => {
-  const { weekLabel, tasks } = req.body;
+  const { weekLabel, tasks, allTasks } = req.body;
   if (!Array.isArray(tasks)) return res.status(400).json({ ok: false, error: 'tasks missing' });
   saveWeeklyPlan({ weekLabel, tasks, savedAt: new Date().toISOString() });
+  // Also persist the full table (all tasks including unmapped) for UI restoration after refresh
+  if (Array.isArray(allTasks)) {
+    saveExcelPreview({ weekLabel, allTasks, savedAt: new Date().toISOString() });
+  }
   log(`[Plan] Weekly plan saved: ${tasks.length} tasks (${weekLabel})`);
   res.json({ ok: true, count: tasks.length });
 });
@@ -507,6 +511,17 @@ app.post('/excel/save-plan', (req, res) => {
 app.get('/excel/saved-plan', (req, res) => {
   const plan = getWeeklyPlan();
   res.json(plan || { tasks: [], weekLabel: null, savedAt: null });
+});
+
+// Restore full preview table after page refresh — recomputes alreadySent from live state
+app.get('/excel/preview', (req, res) => {
+  const preview = getExcelPreview();
+  if (!preview) return res.json(null);
+  const allTasks = (preview.allTasks || []).map(t => ({
+    ...t,
+    alreadySent: !!t.fingerprint && state.has(t.fingerprint),
+  }));
+  res.json({ weekLabel: preview.weekLabel, allTasks, savedAt: preview.savedAt });
 });
 
 app.get('/excel/group-map', (req, res) => res.json(getGroupMap()));

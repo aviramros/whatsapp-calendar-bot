@@ -1449,10 +1449,23 @@ let excelGroupMap = {};
 async function initExcelTab() {
   excelGroupMap = await fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({}));
   renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
-  updateSavedPlanBadge(null);
   await loadCompletedTasks();
-  if (excelParsedTasks.length) renderExcelPreview(excelParsedTasks);
+  // Restore parsed table from server if the user refreshed the page
+  if (!excelParsedTasks.length) await loadSavedPreview();
+  else renderExcelPreview(excelParsedTasks);
+  updateSavedPlanBadge(null);
   loadWeather();
+}
+
+async function loadSavedPreview() {
+  try {
+    const preview = await fetch(`${API_BASE}/excel/preview`).then(r => r.json());
+    if (!preview?.allTasks?.length) return;
+    excelParsedTasks = preview.allTasks;
+    document.getElementById('excel-week-label').textContent = preview.weekLabel || '';
+    document.getElementById('excel-preview-card').style.display = '';
+    renderExcelPreview(excelParsedTasks);
+  } catch {}
 }
 
 function onExcelFileSelected() {
@@ -1501,12 +1514,11 @@ async function parseExcelFile() {
 
 async function savePlanToServer(weekLabel, tasks) {
   try {
-    // Only save tasks that have a whatsappGroup mapping
-    const toSave = tasks.filter(t => t.whatsappGroup);
+    const toSave = tasks.filter(t => t.whatsappGroup); // for daily reminder
     await fetch(`${API_BASE}/excel/save-plan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weekLabel, tasks: toSave })
+      body: JSON.stringify({ weekLabel, tasks: toSave, allTasks: tasks }) // allTasks for UI restore
     });
     updateSavedPlanBadge(weekLabel);
   } catch {}

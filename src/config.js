@@ -5,6 +5,7 @@ const CONFIG_PATH = './data/config.json';
 const GROUP_MAP_PATH = './data/excel-group-map.json';
 const WEEKLY_PLAN_PATH = './data/weekly-plan.json';
 const COMPLETED_TASKS_PATH = './data/completed-tasks.json';
+const EXCEL_PREVIEW_PATH   = './data/excel-preview.json';
 
 const DEFAULTS = {
   groups: ['השקיה', 'עבודות בית', 'ריסוסים'],
@@ -67,4 +68,15 @@ export function getCompletedTasks() {
 export function saveCompletedTasks(arr) {
   mkdirSync(dirname(COMPLETED_TASKS_PATH), { recursive: true });
   writeFileSync(COMPLETED_TASKS_PATH, JSON.stringify(arr, null, 2));
+}
+
+export function getExcelPreview() {
+  if (!existsSync(EXCEL_PREVIEW_PATH)) return null;
+  try { return JSON.parse(readFileSync(EXCEL_PREVIEW_PATH, 'utf8')); }
+  catch { return null; }
+}
+
+export function saveExcelPreview(data) {
+  mkdirSync(dirname(EXCEL_PREVIEW_PATH), { recursive: true });
+  writeFileSync(EXCEL_PREVIEW_PATH, JSON.stringify(data, null, 2));
 }
