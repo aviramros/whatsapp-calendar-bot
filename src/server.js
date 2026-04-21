@@ -447,7 +447,7 @@ app.post('/excel/dispatch', async (req, res) => {
 
   for (const task of tasks) {
     if (!task.whatsappGroup || !task.willSend) { results.skipped.push(task.fingerprint); continue; }
-    if (state.has(task.fingerprint)) { results.skipped.push(task.fingerprint); continue; }
+    if (!calendarOnly && state.has(task.fingerprint)) { results.skipped.push(task.fingerprint); continue; }
 
     try {
       // Send to WhatsApp group (unless calendarOnly mode)

@@ -736,10 +736,10 @@
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
       <div style="display:flex;gap:8px">
         <button class="btn btn-teal" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">
-          📤 שלח לכולם + יומן
+          שלח לכולם
         </button>
         <button class="btn btn-gray" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">
-          📅 טען ליומן בלבד
+          📅 טען ליומן
         </button>
       </div>
       <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">
@@ -1384,7 +1384,8 @@ async function dispatchExcel(calendarOnly = false) {
   btn.disabled = true; otherBtn.disabled = true;
   btn.textContent = calendarOnly ? 'טוען...' : 'שולח...';
   try {
-    const toSend = excelParsedTasks.filter(t => t.willSend && !t.alreadySent);
+    // calendarOnly: send all mapped tasks (ignore alreadySent — calendar may not have them)
+    const toSend = excelParsedTasks.filter(t => t.willSend && (calendarOnly || !t.alreadySent));
     const res = await fetch(`${API_BASE}/excel/dispatch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1414,8 +1415,8 @@ async function dispatchExcel(calendarOnly = false) {
     toast('שגיאה', 'error');
   } finally {
     btn.disabled = false; otherBtn.disabled = false;
-    document.getElementById('dispatch-btn').textContent = '📤 שלח לכולם + יומן';
-    document.getElementById('dispatch-cal-btn').textContent = '📅 טען ליומן בלבד';
+    document.getElementById('dispatch-btn').textContent = 'שלח לכולם';
+    document.getElementById('dispatch-cal-btn').textContent = '📅 טען ליומן';
   }
 }
 
