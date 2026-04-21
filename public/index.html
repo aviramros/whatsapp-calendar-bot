@@ -396,6 +396,67 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 
+    /* ── Dark mode ── */
+    body.dark {
+      --bg: #0f1117;
+      --card: #1c2333;
+      --text: #dde4f0;
+      --muted: #7f8ea3;
+      --border: #2a3347;
+      --teal-light: #0d2e2b;
+    }
+    body.dark #sidebar          { background: #161d2e; }
+    body.dark .sidebar-logo     { color: var(--teal); }
+    body.dark .nav-item:hover   { background: #1e2a3d; color: var(--text); }
+    body.dark .nav-item.active  { background: var(--teal-light); }
+    body.dark .card             { background: var(--card); border-color: var(--border); box-shadow: none; }
+    body.dark .card-title       { color: #c8d4e8; }
+    body.dark .settings-group label { color: #c8d4e8; }
+    body.dark .settings-group input[type=number],
+    body.dark .settings-group input[type=text],
+    body.dark .settings-group input[type=time] { background: #1a2234; border-color: var(--border); color: var(--text); }
+    body.dark .add-group-row input { background: #1a2234; border-color: var(--border); color: var(--text); }
+    body.dark .status-row       { border-color: var(--border); }
+    body.dark .btn-gray         { background: #1e2a3d; border-color: var(--border); color: var(--text); }
+    body.dark .btn-gray:hover:not(:disabled) { background: #253347; }
+    body.dark .upload-area      { border-color: var(--border); color: var(--muted); }
+    body.dark .upload-area:hover { background: var(--teal-light); }
+    body.dark .excel-table th   { background: #1a2234; color: var(--muted); border-color: var(--border); }
+    body.dark .excel-table td   { border-color: var(--border); }
+    body.dark .excel-table tr:hover td { background: #1e2a3d; }
+    body.dark .cal-cell         { background: #1a2234; border-color: var(--border); }
+    body.dark .cal-cell.today   { background: #0d2e2b; }
+    body.dark .cal-cell.other-month { opacity: .2; }
+    body.dark .cal-num          { color: #c8d4e8; }
+    body.dark .week-col         { background: #1a2234; border-color: var(--border); }
+    body.dark .week-col-header  { border-color: var(--border); }
+    body.dark .week-col-header .wdate { color: #c8d4e8; }
+    body.dark .week-empty       { color: #3a4a60; }
+    body.dark .cal-view-btn     { background: var(--card); color: var(--muted); }
+    body.dark .cal-view-btn.active { background: var(--teal); color: #fff; }
+    body.dark .cal-view-toggle  { border-color: var(--border); }
+    body.dark #result-box       { background: #1a2234; border-color: var(--border); }
+    body.dark .excel-results    { background: #1a2234; border-color: var(--border); }
+    body.dark .group-map-table input { background: #1a2234; border-color: var(--border); color: var(--text); }
+    body.dark .settings-section-title { border-color: var(--border); }
+    body.dark #bottom-nav       { background: #161d2e; border-color: var(--border); }
+    body.dark .bnav-item        { color: var(--muted); }
+    body.dark .bnav-item.active { color: var(--teal); }
+    body.dark #tech-lock-modal > div,
+    body.dark #credentials-modal > div { background: var(--card); }
+    body.dark #tech-password-input,
+    body.dark #cred-oauth,
+    body.dark #cred-token { background: #1a2234; border-color: var(--border); color: var(--text); }
+    body.dark .toggle-slider    { background: #374151; }
+    body.dark #gc-connect-btn   { background: #2a569e; }
+    body.dark #sidebar-toggle   { background: var(--card); border-color: var(--border); }
+    body.dark .group-tag        { background: var(--teal-light); color: var(--teal); }
+    body.dark .chip-skip        { background: #1e2a3d; color: var(--muted); }
+    body.dark #saved-plan-badge { background: var(--teal-light); }
+    body.dark .day-event        { background: #1a2234; border-color: var(--border); }
+    body.dark .day-event-title  { color: var(--text); }
+    body.dark #logo-preview-box { background: #1a2234; border-color: var(--border); }
+
     /* ── Bottom nav (mobile only) ── */
     #bottom-nav {
       display: none;
@@ -543,8 +604,16 @@
     </div>
   </nav>
 
-  <div style="padding: 16px; font-size:.75rem; color:#d1d5db; border-top:1px solid var(--border); white-space:nowrap">
+  <div style="padding: 10px 14px; font-size:.75rem; color:#d1d5db; border-top:1px solid var(--border); white-space:nowrap; display:flex; align-items:center; justify-content:space-between">
     v1.0 · gadash
+    <div style="display:flex;gap:2px">
+      <button id="notif-btn" onclick="handleNotifClick()" title="התראות דפדפן"
+        style="background:none;border:none;cursor:pointer;padding:5px;font-size:1.05rem;line-height:1;border-radius:6px;opacity:.6;transition:opacity .15s"
+        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.6'">🔔</button>
+      <button id="dark-mode-btn" onclick="toggleDarkMode()" title="מצב כהה/בהיר"
+        style="background:none;border:none;cursor:pointer;padding:5px;font-size:1.05rem;line-height:1;border-radius:6px;opacity:.6;transition:opacity .15s"
+        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.6'">🌙</button>
+    </div>
   </div>
 </div>
 
@@ -642,6 +711,33 @@
 
 <!-- ══════════════════ SETTINGS ══════════════════ -->
 <div id="tab-settings" class="page">
+
+  <!-- Display preferences card -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      מראה ונוחות
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:.9rem;font-weight:600;color:var(--text)">🌙 מצב כהה</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:2px">מתאים לשימוש בלילה</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:.9rem;font-weight:600;color:var(--text)">🔔 התראות דפדפן</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:2px" id="notif-status-text">קבל התראה כשנוצרים אירועים חדשים</div>
+        </div>
+        <button id="notif-settings-btn" onclick="handleNotifClick()" class="btn btn-gray" style="font-size:.83rem;padding:6px 14px">הפעל</button>
+      </div>
+    </div>
+  </div>
 
   <div class="card">
     <div class="card-title">
@@ -1087,7 +1183,15 @@ const es = new EventSource(`${API_BASE}/events`);
 es.onmessage = e => {
   const { type, data } = JSON.parse(e.data);
   if (type === 'log') appendLog(data, logClass(data));
-  else if (type === 'status' || type === 'syncComplete' || type === 'google-auth') refreshStatus();
+  else if (type === 'status' || type === 'syncComplete' || type === 'google-auth') {
+    refreshStatus();
+    if (type === 'syncComplete' && data?.created?.length > 0) {
+      showPushNotification(
+        `📅 נוצרו ${data.created.length} אירועים חדשים`,
+        data.created.slice(0, 3).map(e => `• ${e.title} (${e.calendar})`).join('\n')
+      );
+    }
+  }
 };
 es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');
 
@@ -1822,7 +1926,59 @@ async function saveSettings() {
   }
 }
 
+// ── Dark mode ─────────────────────────────────────────────────────────────────
+function applyDark(on) {
+  document.body.classList.toggle('dark', on);
+  localStorage.setItem('darkMode', on ? '1' : '0');
+  // Sync sidebar button
+  const btn = document.getElementById('dark-mode-btn');
+  if (btn) btn.textContent = on ? '☀️' : '🌙';
+  // Sync settings toggle
+  const tog = document.getElementById('dark-mode-toggle');
+  if (tog) tog.checked = on;
+}
+function toggleDarkMode() {
+  applyDark(!document.body.classList.contains('dark'));
+}
+
+// ── Push notifications ────────────────────────────────────────────────────────
+function updateNotifUI() {
+  const btn  = document.getElementById('notif-btn');
+  const sbtn = document.getElementById('notif-settings-btn');
+  const txt  = document.getElementById('notif-status-text');
+  const supported = 'Notification' in window;
+  if (!supported) {
+    if (sbtn) sbtn.textContent = 'לא נתמך';
+    if (sbtn) sbtn.disabled = true;
+    return;
+  }
+  const perm = Notification.permission;
+  if (btn)  btn.textContent  = perm === 'granted' ? '🔔' : '🔕';
+  if (sbtn) { sbtn.textContent = perm === 'granted' ? '✅ פעיל' : perm === 'denied' ? '🚫 חסום' : 'הפעל'; sbtn.disabled = perm === 'denied'; }
+  if (txt)  txt.textContent  = perm === 'granted' ? '✅ התראות פעילות' : perm === 'denied' ? 'חסום בהגדרות הדפדפן' : 'קבל התראה כשנוצרים אירועים חדשים';
+}
+async function handleNotifClick() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') return;
+  if (Notification.permission === 'denied') { toast('התראות חסומות — שחרר בהגדרות הדפדפן', 'warning'); return; }
+  await Notification.requestPermission();
+  updateNotifUI();
+  if (Notification.permission === 'granted') toast('התראות דפדפן הופעלו ✅', 'success');
+}
+function showPushNotification(title, body) {
+  if (Notification.permission !== 'granted') return;
+  if (document.visibilityState === 'visible') return; // tab is active, no need
+  try { new Notification(title, { body, icon: '/logo-default.svg', dir: 'rtl', lang: 'he' }); } catch {}
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Dark mode: restore from localStorage or follow system preference
+(function() {
+  const saved = localStorage.getItem('darkMode');
+  const sysDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  applyDark(saved === '1' || (saved === null && sysDark));
+})();
+updateNotifUI();
 updateLockIcon();
 // Start on excel if locked, otherwise dashboard — syncs sidebar + bottom nav
 _doShowTab(dashboardUnlocked ? 'dashboard' : 'excel');
