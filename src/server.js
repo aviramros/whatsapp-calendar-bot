@@ -188,6 +188,7 @@ export async function sendTomorrowTasks() {
 
   const dateLabel = tasks[0].dateLabel;
   const dayName = getHebrewDayName(tomorrow);
+
   let msg = `📋 משימות למחר — ${dayName} ${dateLabel}:\n\n`;
   tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
 
