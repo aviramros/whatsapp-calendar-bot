@@ -29,7 +29,7 @@ import QRCode from 'qrcode';
 import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
-import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan } from './config.js';
+import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks } from './config.js';
 import { parseExcelPlan } from './excel.js';
 import multer from 'multer';
 import {
@@ -186,10 +186,11 @@ async function checkAndWarnTokenExpiry() {
   if (!config.summaryRecipient) return;
 
   const daysLeft = Math.max(0, Math.round(7 - ageDays));
-  const appUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+  const baseUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+  const renewUrl = `${baseUrl}/auth/google/redirect`;
   const msg = daysLeft === 0
-    ? `🔴 *טוקן Google Calendar פג!*\nהבוט לא יכול לגשת ליומן.\nחדש את החיבור כאן:\n${appUrl}`
-    : `⚠️ *טוקן Google Calendar פג בעוד ${daysLeft} ${daysLeft === 1 ? 'יום' : 'ימים'}*\nחדש את החיבור לפני שיפסיק לעבוד:\n${appUrl}`;
+    ? `🔴 *טוקן Google Calendar פג!*\nהבוט לא יכול לגשת ליומן.\nלחץ לחידוש ישיר:\n${renewUrl}`
+    : `⚠️ *טוקן Google Calendar פג בעוד ${daysLeft} ${daysLeft === 1 ? 'יום' : 'ימים'}*\nלחץ לחידוש לפני שיפסיק לעבוד:\n${renewUrl}`;
 
   const recipients = config.summaryRecipient.split(/[,;]/).map(r => r.trim()).filter(Boolean);
   for (const r of recipients) {
@@ -197,6 +198,39 @@ async function checkAndWarnTokenExpiry() {
   }
   lastTokenWarnDate = today;
   log(`[Token] Expiry warning sent — ${daysLeft} days left`);
+}
+
+// ─── Weather helpers ──────────────────────────────────────────────────────────
+
+function weatherEmoji(code) {
+  if (code === 0) return '☀️';
+  if (code <= 3)  return '⛅';
+  if (code <= 48) return '🌫️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '❄️';
+  if (code <= 82) return '🌦️';
+  return '⛈️';
+}
+
+async function fetchWeatherForDate(isoDate) {
+  try {
+    const config = getConfig();
+    const lat = config.latitude  || 32.0853;
+    const lon = config.longitude || 34.7818;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
+      `&timezone=Asia%2FJerusalem&forecast_days=4`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const idx = (data.daily?.time || []).indexOf(isoDate);
+    if (idx === -1) return null;
+    return {
+      maxTemp: Math.round(data.daily.temperature_2m_max[idx]),
+      minTemp: Math.round(data.daily.temperature_2m_min[idx]),
+      precipitation: data.daily.precipitation_probability_max[idx] ?? 0,
+      code: data.daily.weathercode[idx],
+    };
+  } catch { return null; }
 }
 
 // ─── Tomorrow tasks reminder ──────────────────────────────────────────────────
@@ -240,6 +274,12 @@ export async function sendTomorrowTasks() {
 
   let msg = `📋 משימות למחר — ${dayName} ${dateLabel}:\n\n`;
   tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+
+  // Append weather forecast if available
+  const weather = await fetchWeatherForDate(tomorrow);
+  if (weather) {
+    msg += `\n${weatherEmoji(weather.code)} מזג אוויר: ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+  }
   msg = msg.trim();
 
   // Support multiple recipients separated by , or ;
@@ -389,6 +429,8 @@ app.post('/config', (req, res) => {
     logoData: current.logoData ?? null,
     logoOrientation: current.logoOrientation ?? 'landscape',
     logoSize: req.body.logoSize !== undefined ? Number(req.body.logoSize) : (current.logoSize ?? 80),
+    latitude:  req.body.latitude  !== undefined ? Number(req.body.latitude)  : (current.latitude  ?? 32.0853),
+    longitude: req.body.longitude !== undefined ? Number(req.body.longitude) : (current.longitude ?? 34.7818),
   };
   saveConfig(updated);
   // Reschedule if time changed
@@ -606,6 +648,57 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
   } catch (err) {
     log(`[Realtime] Error: ${err.message}`);
   }
+});
+
+// ─── Google OAuth direct redirect (for WhatsApp links) ───────────────────────
+app.get('/auth/google/redirect', (req, res) => {
+  try {
+    const redirectUri = getBaseUrl(req) + '/auth/google/callback';
+    const oAuth2Client = createOAuthClient(redirectUri);
+    const authUrl = oAuth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      prompt: 'consent',
+    });
+    res.redirect(authUrl);
+  } catch (err) {
+    res.status(500).send('שגיאה: ' + err.message);
+  }
+});
+
+// ─── Weather proxy (Open-Meteo, no API key needed) ────────────────────────────
+app.get('/weather', async (req, res) => {
+  const config = getConfig();
+  const lat = config.latitude  || 32.0853;
+  const lon = config.longitude || 34.7818;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
+      `&timezone=Asia%2FJerusalem&forecast_days=4`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Task completion ──────────────────────────────────────────────────────────
+app.get('/tasks/completed', (req, res) => {
+  res.json({ completed: getCompletedTasks() });
+});
+
+app.post('/tasks/toggle', (req, res) => {
+  const { fingerprint, completed } = req.body;
+  if (!fingerprint) return res.status(400).json({ ok: false, error: 'fingerprint missing' });
+  let list = getCompletedTasks();
+  if (completed) {
+    if (!list.includes(fingerprint)) list.push(fingerprint);
+  } else {
+    list = list.filter(f => f !== fingerprint);
+  }
+  saveCompletedTasks(list);
+  res.json({ ok: true });
 });
 
 // ─── Startup ──────────────────────────────────────────────────────────────────

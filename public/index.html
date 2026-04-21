@@ -396,6 +396,20 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 
+    /* ── Weather card ── */
+    .weather-day {
+      background: #f9fafb; border-radius: 10px; padding: 12px 10px;
+      text-align: center; border: 1px solid var(--border);
+    }
+    .weather-day.today { border-color: var(--teal); background: var(--teal-light); }
+    .weather-day-name  { font-size: .75rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .weather-emoji     { font-size: 1.8rem; line-height: 1; margin: 4px 0; }
+    .weather-temps     { font-size: .88rem; font-weight: 700; color: var(--text); }
+    .weather-temps .lo { font-weight: 400; color: var(--muted); }
+    .weather-rain      { font-size: .75rem; color: #3b82f6; margin-top: 3px; }
+    body.dark .weather-day { background: #1a2234; }
+    body.dark .weather-day.today { background: var(--teal-light); }
+
     /* ── Dark mode ── */
     body.dark {
       --bg: #0f1117;
@@ -667,6 +681,17 @@
 
   </div>
 
+  <!-- Weather card -->
+  <div class="card" id="weather-card" style="display:none">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+      תחזית מזג אוויר
+      <span id="weather-location" style="font-size:.78rem;font-weight:400;color:var(--muted);margin-right:6px"></span>
+      <button onclick="loadWeather()" style="margin-right:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:.8rem;padding:2px 6px;border-radius:5px" title="רענן">↻</button>
+    </div>
+    <div id="weather-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+  </div>
+
   <div class="card">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -788,6 +813,25 @@
       <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
         <button class="btn btn-blue" onclick="sendTestMessage()">📱 שלח הודעת בדיקה</button>
         <span id="test-msg-feedback" style="display:none;font-size:.85rem;font-weight:600"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Location for weather ── -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>
+      מיקום (למזג אוויר)
+    </div>
+    <p style="font-size:.83rem;color:var(--muted);margin-bottom:12px">קואורדינטות לתחזית מזג האוויר. <a href="https://www.latlong.net/" target="_blank" style="color:var(--teal)">מצא קואורדינטות »</a></p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div class="settings-group" style="flex:1;min-width:120px;margin-bottom:0">
+        <label>קו רוחב (Latitude)</label>
+        <input type="number" id="setting-latitude" step="0.0001" placeholder="32.0853" style="max-width:180px" />
+      </div>
+      <div class="settings-group" style="flex:1;min-width:120px;margin-bottom:0">
+        <label>קו אורך (Longitude)</label>
+        <input type="number" id="setting-longitude" step="0.0001" placeholder="34.7818" style="max-width:180px" />
       </div>
     </div>
   </div>
@@ -918,7 +962,7 @@
     </div>
     <div class="excel-table-wrap">
     <table class="excel-table">
-      <thead><tr><th>קבוצה</th><th>מטלה</th><th>תאריך</th><th>סטטוס</th></tr></thead>
+      <thead><tr><th style="width:36px">✓</th><th>קבוצה</th><th>מטלה</th><th>תאריך</th><th>סטטוס</th></tr></thead>
       <tbody id="excel-preview-body"></tbody>
     </table>
     </div>
@@ -1406,6 +1450,9 @@ async function initExcelTab() {
   excelGroupMap = await fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({}));
   renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
   updateSavedPlanBadge(null);
+  await loadCompletedTasks();
+  // Re-render table if already loaded to show up-to-date checkbox states
+  if (excelParsedTasks.length) renderExcelPreview(excelParsedTasks);
 }
 
 function onExcelFileSelected() {
@@ -1521,9 +1568,16 @@ function renderExcelPreview(tasks) {
     } else {
       chip = 'ישלח'; chipClass = 'chip-send';
     }
-    return `<tr id="task-row-${i}">
+    const done = completedTasks.has(t.fingerprint);
+    const rowStyle = done ? 'opacity:.5' : '';
+    const textStyle = done ? 'text-decoration:line-through;color:var(--muted)' : '';
+    return `<tr id="task-row-${i}" style="${rowStyle}">
+      <td style="text-align:center">
+        <input type="checkbox" ${done ? 'checked' : ''} onchange="toggleTaskDone('${esc(t.fingerprint)}', this.checked, ${i})"
+          style="width:16px;height:16px;cursor:pointer;accent-color:var(--teal)" />
+      </td>
       <td>${esc(t.whatsappGroup || t.excelGroup)}</td>
-      <td>${esc(t.taskText)}</td>
+      <td style="${textStyle}">${esc(t.taskText)}</td>
       <td style="direction:ltr;text-align:left;color:var(--muted)">${t.dateLabel}</td>
       <td><span class="chip ${chipClass}" id="task-chip-${i}">${chip}</span>${resendBtn}</td>
     </tr>`;
@@ -1904,6 +1958,11 @@ async function loadSettings() {
     } else {
       buildSwatches();
     }
+    // Location
+    const latEl = document.getElementById('setting-latitude');
+    const lonEl = document.getElementById('setting-longitude');
+    if (latEl) latEl.value = cfg.latitude  ?? 32.0853;
+    if (lonEl) lonEl.value = cfg.longitude ?? 34.7818;
   } catch {}
 }
 
@@ -1916,6 +1975,8 @@ async function saveSettings() {
     summaryHour: parseInt((document.getElementById('summary-time').value || '07:00').split(':')[0], 10),
     summaryMinute: parseInt((document.getElementById('summary-time').value || '07:00').split(':')[1], 10),
     themeColor: document.getElementById('theme-color-picker')?.value || '#3DBDB4',
+    latitude:  parseFloat(document.getElementById('setting-latitude')?.value)  || 32.0853,
+    longitude: parseFloat(document.getElementById('setting-longitude')?.value) || 34.7818,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -1924,6 +1985,65 @@ async function saveSettings() {
   } catch {
     toast('שגיאה בשמירת הגדרות', 'error');
   }
+}
+
+// ── Weather ───────────────────────────────────────────────────────────────────
+const WMO_EMOJI = { 0:'☀️', 1:'🌤', 2:'⛅', 3:'☁️', 45:'🌫️', 48:'🌫️',
+  51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',
+  71:'❄️',73:'❄️',75:'❄️',80:'🌦️',81:'🌧️',82:'⛈️',95:'⛈️',99:'⛈️' };
+function wmoEmoji(code) { return WMO_EMOJI[code] || WMO_EMOJI[Math.round(code/10)*10] || '🌡️'; }
+const DAY_SHORT = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+
+async function loadWeather() {
+  try {
+    const data = await fetch(`${API_BASE}/weather`).then(r => r.json());
+    if (!data.daily) return;
+    const { time, temperature_2m_max: hi, temperature_2m_min: lo,
+            precipitation_probability_max: rain, weathercode: code } = data.daily;
+    const today = new Date().toISOString().slice(0, 10);
+    const grid = document.getElementById('weather-grid');
+    grid.innerHTML = time.slice(0, 3).map((d, i) => {
+      const isToday = d === today;
+      const dow = new Date(d + 'T12:00:00').getDay();
+      const label = isToday ? 'היום' : (i === 1 ? 'מחר' : 'יום ' + DAY_SHORT[dow]);
+      const rainPct = rain[i] ?? 0;
+      return `<div class="weather-day${isToday ? ' today' : ''}">
+        <div class="weather-day-name">${label}</div>
+        <div class="weather-emoji">${wmoEmoji(code[i])}</div>
+        <div class="weather-temps">${Math.round(hi[i])}° <span class="lo">/ ${Math.round(lo[i])}°</span></div>
+        ${rainPct > 10 ? `<div class="weather-rain">💧 ${rainPct}%</div>` : '<div class="weather-rain" style="visibility:hidden">-</div>'}
+      </div>`;
+    }).join('');
+    document.getElementById('weather-card').style.display = '';
+  } catch {}
+}
+
+// ── Task completion ───────────────────────────────────────────────────────────
+let completedTasks = new Set();
+
+async function loadCompletedTasks() {
+  try {
+    const { completed } = await fetch(`${API_BASE}/tasks/completed`).then(r => r.json());
+    completedTasks = new Set(completed || []);
+  } catch { completedTasks = new Set(); }
+}
+
+async function toggleTaskDone(fingerprint, done, rowIdx) {
+  completedTasks[done ? 'add' : 'delete'](fingerprint);
+  // Update row style immediately
+  const row = document.getElementById(`task-row-${rowIdx}`);
+  if (row) {
+    row.style.opacity = done ? '.5' : '';
+    const taskCell = row.cells[2]; // מטלה column (index 2, after checkbox + group)
+    if (taskCell) taskCell.style.textDecoration = done ? 'line-through' : '';
+  }
+  try {
+    await fetch(`${API_BASE}/tasks/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fingerprint, completed: done })
+    });
+  } catch {}
 }
 
 // ── Dark mode ─────────────────────────────────────────────────────────────────
@@ -1985,7 +2105,9 @@ _doShowTab(dashboardUnlocked ? 'dashboard' : 'excel');
 refreshStatus();
 loadSettings();
 buildSwatches();
+loadWeather();
 setInterval(refreshStatus, 15000);
+setInterval(loadWeather, 30 * 60 * 1000); // refresh weather every 30 min
 </script>
 </body>
 </html>

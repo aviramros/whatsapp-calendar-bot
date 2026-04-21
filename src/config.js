@@ -4,6 +4,7 @@ import { dirname } from 'path';
 const CONFIG_PATH = './data/config.json';
 const GROUP_MAP_PATH = './data/excel-group-map.json';
 const WEEKLY_PLAN_PATH = './data/weekly-plan.json';
+const COMPLETED_TASKS_PATH = './data/completed-tasks.json';
 
 const DEFAULTS = {
   groups: ['השקיה', 'עבודות בית', 'ריסוסים'],
@@ -14,6 +15,8 @@ const DEFAULTS = {
   themeColor: '#3DBDB4',
   logoData: null,
   logoOrientation: 'landscape',
+  latitude: 32.0853,   // default: Tel Aviv area
+  longitude: 34.7818,
 };
 
 export function getConfig() {
@@ -53,4 +56,15 @@ export function getWeeklyPlan() {
 export function saveWeeklyPlan(plan) {
   mkdirSync(dirname(WEEKLY_PLAN_PATH), { recursive: true });
   writeFileSync(WEEKLY_PLAN_PATH, JSON.stringify(plan, null, 2));
+}
+
+export function getCompletedTasks() {
+  if (!existsSync(COMPLETED_TASKS_PATH)) return [];
+  try { return JSON.parse(readFileSync(COMPLETED_TASKS_PATH, 'utf8')); }
+  catch { return []; }
+}
+
+export function saveCompletedTasks(arr) {
+  mkdirSync(dirname(COMPLETED_TASKS_PATH), { recursive: true });
+  writeFileSync(COMPLETED_TASKS_PATH, JSON.stringify(arr, null, 2));
 }
