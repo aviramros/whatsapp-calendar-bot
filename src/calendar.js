@@ -76,10 +76,30 @@ export async function getOrCreateCalendar(auth, calendarName, calendarIdMap) {
 }
 
 /**
- * Creates an all-day event on the given calendar.
+ * Creates an all-day event only if an event with the same title doesn't
+ * already exist on that date in that calendar.
+ * Returns true if created, false if skipped (already exists).
  */
 export async function createAllDayEvent(auth, calendarId, title, dateISO) {
   const calendar = google.calendar({ version: 'v3', auth });
+
+  // Check for existing event with same title on the same date
+  const dayStart = `${dateISO}T00:00:00Z`;
+  const dayEnd   = `${dateISO}T23:59:59Z`;
+  const existing = await calendar.events.list({
+    calendarId,
+    timeMin: dayStart,
+    timeMax: dayEnd,
+    q: title,
+    singleEvents: true,
+    maxResults: 10,
+  });
+
+  const duplicate = (existing.data.items || []).some(
+    ev => (ev.summary || '').trim() === title.trim()
+  );
+  if (duplicate) return false;
+
   await calendar.events.insert({
     calendarId,
     requestBody: {
@@ -88,6 +108,7 @@ export async function createAllDayEvent(auth, calendarId, title, dateISO) {
       end: { date: dateISO },
     },
   });
+  return true;
 }
 
 /**

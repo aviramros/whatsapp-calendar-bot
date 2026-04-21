@@ -460,13 +460,18 @@ app.post('/excel/dispatch', async (req, res) => {
         if (!sent) log(`[Excel] WhatsApp send failed for: ${msgText}`);
       }
 
-      // Create calendar event
+      // Create calendar event (skips if already exists in Google Calendar)
       const calId = await getOrCreateCalendar(auth, task.whatsappGroup, calendarIds);
-      await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
+      const created = await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
       state.add(fp);
-      totalEventsCreated++;
-      results.created.push({ title: task.taskText, date: task.dateISO, calendar: task.whatsappGroup });
-      log(`[Excel] ${calendarOnly ? '📅' : '📤'} "${task.taskText}" on ${task.dateISO} → ${task.whatsappGroup}`);
+      if (created) {
+        totalEventsCreated++;
+        results.created.push({ title: task.taskText, date: task.dateISO, calendar: task.whatsappGroup });
+        log(`[Excel] ${calendarOnly ? '📅' : '📤'} "${task.taskText}" on ${task.dateISO} → ${task.whatsappGroup}`);
+      } else {
+        results.skipped.push(fp);
+        log(`[Excel] ⏭ already exists: "${task.taskText}" on ${task.dateISO}`);
+      }
     } catch (err) {
       log(`[Excel] Error: ${err.message}`);
       results.errors.push(err.message);
