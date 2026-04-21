@@ -311,9 +311,14 @@ app.post('/trigger', async (req, res) => {
 app.post('/test-message', async (req, res) => {
   const { summaryRecipient } = getConfig();
   if (!summaryRecipient) return res.json({ ok: false, error: 'No summary recipient configured' });
-  const sent = await sendWhatsAppMessage(summaryRecipient, '✅ הודעת בדיקה מהבוט — הכל עובד!');
-  log(`[Test] Message ${sent ? 'sent ✅' : 'failed ❌'} to ${summaryRecipient}`);
-  res.json({ ok: sent, recipient: summaryRecipient });
+  const recipients = summaryRecipient.split(/[,;]/).map(r => r.trim()).filter(Boolean);
+  let sentCount = 0;
+  for (const r of recipients) {
+    const sent = await sendWhatsAppMessage(r, '✅ הודעת בדיקה מהבוט — הכל עובד!');
+    if (sent) sentCount++;
+    log(`[Test] Message ${sent ? 'sent ✅' : 'failed ❌'} to ${r}`);
+  }
+  res.json({ ok: sentCount > 0, recipient: summaryRecipient, sent: sentCount, total: recipients.length });
 });
 
 // Config endpoints
