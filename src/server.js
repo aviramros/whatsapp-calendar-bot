@@ -447,7 +447,10 @@ app.post('/excel/dispatch', async (req, res) => {
 
   for (const task of tasks) {
     if (!task.whatsappGroup || !task.willSend) { results.skipped.push(task.fingerprint); continue; }
-    if (!calendarOnly && state.has(task.fingerprint)) { results.skipped.push(task.fingerprint); continue; }
+
+    // Use separate fingerprint prefix for calendar-only to track independently
+    const fp = calendarOnly ? `cal:${task.fingerprint}` : task.fingerprint;
+    if (state.has(fp)) { results.skipped.push(fp); continue; }
 
     try {
       // Send to WhatsApp group (unless calendarOnly mode)
@@ -460,7 +463,7 @@ app.post('/excel/dispatch', async (req, res) => {
       // Create calendar event
       const calId = await getOrCreateCalendar(auth, task.whatsappGroup, calendarIds);
       await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
-      state.add(task.fingerprint);
+      state.add(fp);
       totalEventsCreated++;
       results.created.push({ title: task.taskText, date: task.dateISO, calendar: task.whatsappGroup });
       log(`[Excel] ${calendarOnly ? '📅' : '📤'} "${task.taskText}" on ${task.dateISO} → ${task.whatsappGroup}`);
