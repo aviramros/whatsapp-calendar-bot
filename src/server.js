@@ -427,7 +427,7 @@ app.post('/excel/parse', upload.single('file'), (req, res) => {
 });
 
 app.post('/excel/dispatch', async (req, res) => {
-  const { tasks } = req.body;
+  const { tasks, calendarOnly = false } = req.body;
   if (!Array.isArray(tasks)) return res.status(400).json({ error: 'tasks missing' });
 
   const results = { created: [], skipped: [], errors: [] };
@@ -450,18 +450,20 @@ app.post('/excel/dispatch', async (req, res) => {
     if (state.has(task.fingerprint)) { results.skipped.push(task.fingerprint); continue; }
 
     try {
-      // Send to WhatsApp group (best-effort)
-      const msgText = `${task.taskText} ${task.dateLabel}`;
-      const sent = await sendWhatsAppMessage(task.whatsappGroup, msgText);
-      if (!sent) log(`[Excel] WhatsApp send failed for: ${msgText}`);
+      // Send to WhatsApp group (unless calendarOnly mode)
+      if (!calendarOnly) {
+        const msgText = `${task.taskText} ${task.dateLabel}`;
+        const sent = await sendWhatsAppMessage(task.whatsappGroup, msgText);
+        if (!sent) log(`[Excel] WhatsApp send failed for: ${msgText}`);
+      }
 
-      // Create calendar event directly
+      // Create calendar event
       const calId = await getOrCreateCalendar(auth, task.whatsappGroup, calendarIds);
       await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
       state.add(task.fingerprint);
       totalEventsCreated++;
       results.created.push({ title: task.taskText, date: task.dateISO, calendar: task.whatsappGroup });
-      log(`[Excel] Created: "${task.taskText}" on ${task.dateISO} → ${task.whatsappGroup}`);
+      log(`[Excel] ${calendarOnly ? '📅' : '📤'} "${task.taskText}" on ${task.dateISO} → ${task.whatsappGroup}`);
     } catch (err) {
       log(`[Excel] Error: ${err.message}`);
       results.errors.push(err.message);

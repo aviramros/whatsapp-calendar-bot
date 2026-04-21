@@ -734,9 +734,14 @@
       <tbody id="excel-preview-body"></tbody>
     </table>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
-      <button class="btn btn-teal" style="width:100%;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel()">
-        שלח לכולם ויצור אירועי לוח שנה
-      </button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-teal" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">
+          📤 שלח לכולם + יומן
+        </button>
+        <button class="btn btn-gray" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">
+          📅 טען ליומן בלבד
+        </button>
+      </div>
       <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">
         ↩ שלח הכל שוב
       </button>
@@ -1373,21 +1378,27 @@ async function resendAll() {
   else toast(`נשלחו ${sent}, נכשלו ${failed}`, failed > 0 ? 'warning' : 'success');
 }
 
-async function dispatchExcel() {
-  const btn = document.getElementById('dispatch-btn');
-  btn.disabled = true; btn.textContent = 'שולח...';
+async function dispatchExcel(calendarOnly = false) {
+  const btn = document.getElementById(calendarOnly ? 'dispatch-cal-btn' : 'dispatch-btn');
+  const otherBtn = document.getElementById(calendarOnly ? 'dispatch-btn' : 'dispatch-cal-btn');
+  btn.disabled = true; otherBtn.disabled = true;
+  btn.textContent = calendarOnly ? 'טוען...' : 'שולח...';
   try {
     const toSend = excelParsedTasks.filter(t => t.willSend && !t.alreadySent);
-    const res = await fetch(`${API_BASE}/excel/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks: toSend }) });
+    const res = await fetch(`${API_BASE}/excel/dispatch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: toSend, calendarOnly })
+    });
     const data = await res.json();
     const resultsEl = document.getElementById('excel-results');
     let html = '';
     if (data.created.length) {
-      html += `<div class="created" style="font-weight:600">נוצרו ${data.created.length} אירועים:</div>`;
+      html += `<div class="created" style="font-weight:600">${calendarOnly ? 'נוצרו' : 'נשלחו ונוצרו'} ${data.created.length} אירועים:</div>`;
       data.created.forEach(e => { html += `<div class="created" style="padding-right:8px">• ${esc(e.title)} — ${e.date}</div>`; });
-      toast(`נשלחו ${data.created.length} משימות ליומן ✨`, 'success');
+      toast(`${calendarOnly ? '📅' : '📤'} ${data.created.length} אירועים ${calendarOnly ? 'נוצרו ביומן' : 'נשלחו ונוצרו'} ✨`, 'success');
     } else {
-      toast('לא נשלחו משימות חדשות', 'info');
+      toast('אין אירועים חדשים', 'info');
     }
     if (data.skipped.length) html += `<div class="skipped-text">דולגו: ${data.skipped.length}</div>`;
     data.errors.forEach(e => { html += `<div class="errors">✗ ${esc(e)}</div>`; });
@@ -1395,15 +1406,16 @@ async function dispatchExcel() {
     resultsEl.innerHTML = html; resultsEl.style.display = 'block';
     excelParsedTasks = excelParsedTasks.map(t => ({ ...t, alreadySent: t.alreadySent || (t.willSend && !t.alreadySent) }));
     renderExcelPreview(excelParsedTasks);
-    // Re-save plan after dispatch (whatsappGroup may have been updated)
     const weekLabel = document.getElementById('excel-week-label').textContent;
     await savePlanToServer(weekLabel, excelParsedTasks);
   } catch (err) {
     const r = document.getElementById('excel-results');
     r.innerHTML = `<div class="errors">❌ ${esc(err.message)}</div>`; r.style.display = 'block';
-    toast('שגיאה בשליחה', 'error');
+    toast('שגיאה', 'error');
   } finally {
-    btn.textContent = 'שלח לכולם ויצור אירועי לוח שנה';
+    btn.disabled = false; otherBtn.disabled = false;
+    document.getElementById('dispatch-btn').textContent = '📤 שלח לכולם + יומן';
+    document.getElementById('dispatch-cal-btn').textContent = '📅 טען ליומן בלבד';
   }
 }
 
