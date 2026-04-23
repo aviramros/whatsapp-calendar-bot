@@ -1014,9 +1014,14 @@
         <button class="btn btn-teal" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">
           שלח לכולם
         </button>
-        <button class="btn btn-gray" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">
-          📅 טען ליומן
-        </button>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+          <button class="btn btn-gray" style="width:100%;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">
+            📅 טען ליומן
+          </button>
+          <button onclick="resetCalendarState(this)" style="background:none;border:none;font-size:.75rem;color:var(--muted);cursor:pointer;padding:2px 0;text-align:center" title="אחרי מחיקה מהיומן — אפשר טעינה מחדש">
+            🔄 אפס סטטוס יומן
+          </button>
+        </div>
       </div>
       <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">
         ↩ שלח הכל שוב
@@ -1735,6 +1740,27 @@ async function resendTask(index, btn) {
     chip.textContent = 'כבר נשלח';
     btn.disabled = false;
     toast('שגיאה בשליחה חוזרת', 'error');
+  }
+}
+
+async function resetCalendarState(btn) {
+  // Collect fingerprints of current tasks to reset only relevant entries
+  const fingerprints = excelParsedTasks.map(t => t.fingerprint).filter(Boolean);
+  try {
+    btn.textContent = '⏳...';
+    await fetch(`${API_BASE}/state/calendar`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fingerprints })
+    });
+    // Mark all tasks as not-yet-sent in memory so the UI reflects the reset
+    excelParsedTasks = excelParsedTasks.map(t => ({ ...t, alreadySent: false }));
+    renderExcelPreview(excelParsedTasks);
+    toast('🔄 סטטוס היומן אופס — ניתן לטעון מחדש', 'success');
+  } catch (e) {
+    toast('שגיאה: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '🔄 אפס סטטוס יומן';
   }
 }
 

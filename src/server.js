@@ -833,6 +833,33 @@ app.delete('/excel/reset', (req, res) => {
   }
 });
 
+// Clear calendar fingerprints so events can be re-imported after manual deletion from Google Calendar
+// Clears only cal: prefixed entries (calendar-only dispatches) by default,
+// or specific fingerprints if provided in body.
+app.delete('/state/calendar', (req, res) => {
+  try {
+    const { fingerprints } = req.body || {};
+    if (Array.isArray(fingerprints) && fingerprints.length > 0) {
+      // Remove specific fingerprints (both raw and cal: variants)
+      for (const fp of fingerprints) {
+        state.remove(fp);
+        state.remove(`cal:${fp}`);
+      }
+      log(`[State] Removed ${fingerprints.length * 2} fingerprints (calendar reset)`);
+    } else {
+      // Remove ALL cal: prefixed fingerprints
+      let count = 0;
+      for (const fp of [...state.processed]) {
+        if (fp.startsWith('cal:')) { state.remove(fp); count++; }
+      }
+      log(`[State] Cleared ${count} calendar fingerprints`);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Manual trigger for weekly summary (from dashboard)
 app.post('/excel/weekly-summary', async (req, res) => {
   try {
