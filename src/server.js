@@ -45,7 +45,8 @@ import {
   createOAuthClient,
 } from './calendar.js';
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
-         scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo } from './scheduler.js';
+         scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo,
+         scheduleGroupReminders, stopGroupReminders } from './scheduler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -302,9 +303,6 @@ export async function sendTomorrowTasks() {
     log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${recipient}`);
   }
   broadcast('log', `[Tomorrow] Reminder sent to ${sentCount}/${recipients.length} recipients — ${tasks.length} tasks`);
-
-  // Also send per-group reminders (if enabled)
-  await sendTomorrowTasksToGroups();
 }
 
 // ─── Weekly auto-dispatch ─────────────────────────────────────────────────────
@@ -562,6 +560,8 @@ app.post('/config', (req, res) => {
     weeklyDispatchMinute: req.body.weeklyDispatchMinute !== undefined ? Number(req.body.weeklyDispatchMinute) : (current.weeklyDispatchMinute ?? 0),
     // Per-group daily reminders
     groupRemindersEnabled: req.body.groupRemindersEnabled !== undefined ? Boolean(req.body.groupRemindersEnabled) : (current.groupRemindersEnabled ?? false),
+    groupRemindersHour:   req.body.groupRemindersHour   !== undefined ? Number(req.body.groupRemindersHour)   : (current.groupRemindersHour   ?? 7),
+    groupRemindersMinute: req.body.groupRemindersMinute !== undefined ? Number(req.body.groupRemindersMinute) : (current.groupRemindersMinute ?? 0),
   };
   saveConfig(updated);
 
@@ -575,6 +575,13 @@ app.post('/config', (req, res) => {
     scheduleWeeklyDispatch(updated.weeklyDispatchDay, updated.weeklyDispatchHour, updated.weeklyDispatchMinute, autoDispatchWeeklyPlan);
   } else {
     stopWeeklyDispatch();
+  }
+
+  // Reschedule (or stop) group reminders
+  if (updated.groupRemindersEnabled) {
+    scheduleGroupReminders(updated.groupRemindersHour, updated.groupRemindersMinute, sendTomorrowTasksToGroups);
+  } else {
+    stopGroupReminders();
   }
 
   const hh = String(updated.summaryHour).padStart(2,'0');
@@ -967,10 +974,13 @@ const server = app.listen(PORT, () => {
   initWhatsApp();
   startScheduler(runSync);
 
-  // Weekly auto-dispatch (if enabled in config)
+  // Weekly auto-dispatch + group reminders (if enabled in config)
   const cfg = getConfig();
   if (cfg.weeklyDispatchEnabled) {
     scheduleWeeklyDispatch(cfg.weeklyDispatchDay, cfg.weeklyDispatchHour, cfg.weeklyDispatchMinute, autoDispatchWeeklyPlan);
+  }
+  if (cfg.groupRemindersEnabled) {
+    scheduleGroupReminders(cfg.groupRemindersHour ?? 7, cfg.groupRemindersMinute ?? 0, sendTomorrowTasksToGroups);
   }
 
   // Weekly summary: every Friday at 20:00 Israel time

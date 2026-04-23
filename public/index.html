@@ -879,15 +879,21 @@
 
     <!-- Group reminders -->
     <div style="border:1px solid var(--border);border-radius:10px;padding:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div>
           <div style="font-weight:600;font-size:.9rem">💬 תזכורת מחר לכל קבוצה</div>
           <div style="font-size:.8rem;color:var(--muted);margin-top:2px">כל קבוצת ווטסאפ מקבלת הודעה עם המשימות שלה למחר</div>
         </div>
         <label class="toggle-switch">
-          <input type="checkbox" id="group-reminders-enabled">
+          <input type="checkbox" id="group-reminders-enabled" onchange="toggleGroupReminders(this.checked)">
           <span class="toggle-slider"></span>
         </label>
+      </div>
+      <div id="group-reminders-settings" style="display:none">
+        <div class="settings-group" style="margin-bottom:0;max-width:180px">
+          <label>שעת שליחה</label>
+          <input type="time" id="group-reminders-time" value="07:00" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)" />
+        </div>
       </div>
     </div>
   </div>
@@ -1552,6 +1558,11 @@ function toggleWeeklyDispatch(enabled) {
   if (settings) settings.style.display = enabled ? 'flex' : 'none';
 }
 
+function toggleGroupReminders(enabled) {
+  const settings = document.getElementById('group-reminders-settings');
+  if (settings) settings.style.display = enabled ? 'block' : 'none';
+}
+
 async function sendTestMessage() {
   toast('שולח הודעת בדיקה...', 'info', 2000);
   try {
@@ -2197,7 +2208,12 @@ async function loadSettings() {
     const wm = String(cfg.weeklyDispatchMinute ?? 0).padStart(2,'0');
     document.getElementById('weekly-dispatch-time').value = `${wh}:${wm}`;
     // Group reminders
-    document.getElementById('group-reminders-enabled').checked = cfg.groupRemindersEnabled ?? false;
+    const grEnabled = cfg.groupRemindersEnabled ?? false;
+    document.getElementById('group-reminders-enabled').checked = grEnabled;
+    toggleGroupReminders(grEnabled);
+    const grh = String(cfg.groupRemindersHour ?? 7).padStart(2,'0');
+    const grm = String(cfg.groupRemindersMinute ?? 0).padStart(2,'0');
+    document.getElementById('group-reminders-time').value = `${grh}:${grm}`;
   } catch {}
 }
 
@@ -2217,6 +2233,8 @@ async function saveSettings() {
     weeklyDispatchHour:   parseInt((document.getElementById('weekly-dispatch-time').value || '17:00').split(':')[0], 10),
     weeklyDispatchMinute: parseInt((document.getElementById('weekly-dispatch-time').value || '17:00').split(':')[1], 10),
     groupRemindersEnabled: document.getElementById('group-reminders-enabled').checked,
+    groupRemindersHour:   parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[0], 10),
+    groupRemindersMinute: parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[1], 10),
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

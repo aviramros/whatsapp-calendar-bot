@@ -67,3 +67,21 @@ export function getWeeklyDispatchInfo() {
   if (weeklyDay === null) return null;
   return { day: weeklyDay, hour: weeklyHour, minute: weeklyMinute, dayName: HE_DAYS[weeklyDay] || weeklyDay };
 }
+
+// ── Group reminders scheduler ──────────────────────────────────────────────────
+let groupRemindersTask = null;
+
+export function scheduleGroupReminders(hour, minute, callback) {
+  if (groupRemindersTask) { groupRemindersTask.stop(); groupRemindersTask = null; }
+  const h = Number(hour ?? 7);
+  const m = Number(minute ?? 0);
+  groupRemindersTask = cron.schedule(`${m} ${h} * * *`, async () => {
+    console.log(`[Scheduler] Group reminders trigger fired at ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    try { await callback(); } catch (e) { console.error('[Scheduler] Group reminders error:', e.message); }
+  }, { timezone: 'Asia/Jerusalem' });
+  console.log(`[Scheduler] Group reminders scheduled at ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} Asia/Jerusalem`);
+}
+
+export function stopGroupReminders() {
+  if (groupRemindersTask) { groupRemindersTask.stop(); groupRemindersTask = null; }
+}

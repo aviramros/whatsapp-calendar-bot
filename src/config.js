@@ -22,6 +22,8 @@ const DEFAULTS = {
   weeklyDispatchMinute: 0,
   // Daily group reminders (each group gets its own tomorrow-tasks message)
   groupRemindersEnabled: false,
+  groupRemindersHour: 7,
+  groupRemindersMinute: 0,
   logoOrientation: 'landscape',
   latitude: 32.0853,   // default: Tel Aviv area
   longitude: 34.7818,
