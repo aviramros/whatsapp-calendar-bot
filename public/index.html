@@ -945,7 +945,10 @@
     </label>
     <input type="file" id="excel-file-input" accept=".xlsx,.xls" onchange="onExcelFileSelected()" style="display:none" />
     <div id="excel-file-status" style="font-size:.83rem;color:var(--muted);margin-top:8px"></div>
-    <button class="btn btn-teal" id="parse-btn" onclick="parseExcelFile()" disabled style="margin-top:10px">נתח קובץ</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-teal" id="parse-btn" onclick="parseExcelFile()" disabled style="flex:1">נתח קובץ</button>
+      <button class="btn btn-gray" onclick="resetWeeklyPlan()" title="אפס תכנית שבועית" style="color:#ef4444;border-color:#fca5a5">🗑 אפס</button>
+    </div>
   </div>
 
   <div class="card" id="group-map-card">
