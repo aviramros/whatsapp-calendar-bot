@@ -21,6 +21,7 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync, statSync } from 'fs
 
 import express from 'express';
 import cors from 'cors';
+import cron from 'node-cron';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execSync } from 'child_process';
@@ -237,6 +238,11 @@ async function fetchWeatherForDate(isoDate) {
 
 const HE_DAYS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
 
+function getTodayISO() {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+}
+
 function getTomorrowISO() {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
   now.setDate(now.getDate() + 1);
@@ -295,6 +301,50 @@ export async function sendTomorrowTasks() {
     log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${recipient}`);
   }
   broadcast('log', `[Tomorrow] Reminder sent to ${sentCount}/${recipients.length} recipients — ${tasks.length} tasks`);
+}
+
+// ─── Weekly summary ───────────────────────────────────────────────────────────
+
+export async function sendWeeklySummary() {
+  const config = getConfig();
+  if (!config.summaryRecipient) { log('[WeeklySummary] No recipient configured — skipping'); return; }
+
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) { log('[WeeklySummary] No weekly plan — skipping'); return; }
+
+  const completedList = getCompletedTasks();
+  const tasks = plan.tasks;
+  const total     = tasks.length;
+  const completed = tasks.filter(t => t.fingerprint && completedList.includes(t.fingerprint)).length;
+  const sent      = tasks.filter(t => t.fingerprint && state.has(t.fingerprint)).length;
+  const pending   = total - completed;
+
+  // Per-day breakdown
+  const byDate = {};
+  for (const t of tasks) {
+    if (!byDate[t.dateISO]) byDate[t.dateISO] = { label: t.dateLabel, total: 0, done: 0 };
+    byDate[t.dateISO].total++;
+    if (t.fingerprint && completedList.includes(t.fingerprint)) byDate[t.dateISO].done++;
+  }
+
+  let msg = `📊 *סיכום שבועי — ${plan.weekLabel || ''}*\n\n`;
+  msg += `✅ בוצעו: ${completed}/${total}\n`;
+  msg += `📤 נשלחו: ${sent}/${total}\n`;
+  if (pending > 0) msg += `⏳ ממתינות: ${pending}\n`;
+  msg += '\n';
+
+  for (const date of Object.keys(byDate).sort()) {
+    const { label, total: dt, done } = byDate[date];
+    const icon = done === dt ? '✅' : done > 0 ? '◑' : '○';
+    msg += `${icon} ${getHebrewDayName(date)} ${label}: ${done}/${dt}\n`;
+  }
+  msg = msg.trim();
+
+  const recipients = config.summaryRecipient.split(/[,;]/).map(r => r.trim()).filter(Boolean);
+  for (const recipient of recipients) {
+    const sent = await sendWhatsAppMessage(recipient, msg);
+    log(`[WeeklySummary] ${sent ? '✅' : '❌'} → ${recipient}`);
+  }
 }
 
 // ─── Express routes ───────────────────────────────────────────────────────────
@@ -644,6 +694,61 @@ whatsappEvents.on('disconnected', () => broadcast('status', { whatsappConnected:
 whatsappEvents.on('qr', () => broadcast('status', { qrAvailable: true }));
 
 whatsappEvents.on('message', async ({ body, groupName }) => {
+  const trimmed = (body || '').trim();
+
+  // ── Feature 5: Query commands ────────────────────────────────────────────────
+  if (groupName) {
+    const asksToday    = /מה\s*היום|משימות\s*היום|מה\s*לעשות\s*היום/i.test(trimmed);
+    const asksTomorrow = /מה\s*מחר|משימות\s*מחר|מה\s*לעשות\s*מחר/i.test(trimmed);
+
+    if (asksToday || asksTomorrow) {
+      const targetDate = asksToday ? getTodayISO() : getTomorrowISO();
+      const plan = getWeeklyPlan();
+      const tasks = (plan?.tasks || []).filter(t =>
+        t.dateISO === targetDate && (t.whatsappGroup === groupName || !t.whatsappGroup)
+      );
+      if (tasks.length > 0) {
+        const dayName = getHebrewDayName(targetDate);
+        let msg = `📋 משימות ${asksToday ? 'היום' : 'מחר'} — ${dayName} ${tasks[0].dateLabel}:\n\n`;
+        tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+        await sendWhatsAppMessage(groupName, msg.trim());
+      } else {
+        await sendWhatsAppMessage(groupName, `📋 אין משימות רשומות ${asksToday ? 'להיום' : 'למחר'}`);
+      }
+      return;
+    }
+  }
+
+  // ── Feature 6: "בוצע" — mark today's group tasks as done ────────────────────
+  if (groupName && /^בוצע[!.]*$|^✓$|^✅$/.test(trimmed)) {
+    const today = getTodayISO();
+    const preview = getExcelPreview();
+    const plan    = getWeeklyPlan();
+    const allTasks = preview?.allTasks || plan?.tasks || [];
+    const todayTasks = allTasks.filter(t =>
+      t.dateISO === today &&
+      (t.whatsappGroup === groupName || t.excelGroup === groupName)
+    );
+    if (todayTasks.length > 0) {
+      const list = getCompletedTasks();
+      let added = 0;
+      for (const task of todayTasks) {
+        if (task.fingerprint && !list.includes(task.fingerprint)) {
+          list.push(task.fingerprint);
+          added++;
+        }
+      }
+      saveCompletedTasks(list);
+      broadcast('tasksUpdated', { completed: list }); // UI refresh
+      if (added > 0) {
+        await sendWhatsAppMessage(groupName, `✅ ${added} משימות סומנו כבוצעו`);
+        log(`[WhatsApp] Marked ${added} tasks done for "${groupName}"`);
+      }
+    }
+    return;
+  }
+
+  // ── Existing: Google Calendar real-time sync ─────────────────────────────────
   if (!isGoogleAuthenticated()) return;
   const events = parseMessage(body, groupName);
   if (!events) return;
@@ -728,12 +833,29 @@ app.delete('/excel/reset', (req, res) => {
   }
 });
 
+// Manual trigger for weekly summary (from dashboard)
+app.post('/excel/weekly-summary', async (req, res) => {
+  try {
+    await sendWeeklySummary();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 const server = app.listen(PORT, () => {
   console.log(`\n[Server] Running at http://localhost:${PORT}\n`);
   initWhatsApp();
   startScheduler(runSync);
+
+  // Weekly summary: every Friday at 20:00 Israel time
+  cron.schedule('0 20 * * 5', async () => {
+    log('[WeeklySummary] Friday 20:00 — sending weekly summary');
+    try { await sendWeeklySummary(); } catch (e) { log('[WeeklySummary] Error: ' + e.message); }
+  }, { timezone: 'Asia/Jerusalem' });
+  console.log('[Scheduler] Weekly summary scheduled: Fridays 20:00 Asia/Jerusalem');
 });
 
 server.on('error', (err) => {

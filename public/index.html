@@ -999,7 +999,13 @@
 
     <div class="excel-table-wrap">
     <table class="excel-table">
-      <thead><tr><th style="width:36px">✓</th><th>קבוצה</th><th>מטלה</th><th>תאריך</th><th>סטטוס</th></tr></thead>
+      <thead><tr>
+        <th style="width:36px">✓</th>
+        <th onclick="setSortCol('group')" style="cursor:pointer;user-select:none">קבוצה <span id="sort-ind-group"></span></th>
+        <th onclick="setSortCol('task')"  style="cursor:pointer;user-select:none">מטלה <span id="sort-ind-task"></span></th>
+        <th onclick="setSortCol('date')"  style="cursor:pointer;user-select:none">תאריך <span id="sort-ind-date"></span></th>
+        <th>סטטוס</th>
+      </tr></thead>
       <tbody id="excel-preview-body"></tbody>
     </table>
     </div>
@@ -1014,6 +1020,9 @@
       </div>
       <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">
         ↩ שלח הכל שוב
+      </button>
+      <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;margin-top:2px" onclick="sendWeeklySummaryNow(this)">
+        📊 שלח סיכום שבועי עכשיו
       </button>
     </div>
   </div>
@@ -1272,6 +1281,11 @@ es.onmessage = e => {
         data.created.slice(0, 3).map(e => `• ${e.title} (${e.calendar})`).join('\n')
       );
     }
+  } else if (type === 'tasksUpdated' && data?.completed) {
+    // Someone wrote "בוצע" in WhatsApp — refresh completed tasks in the UI
+    completedTasks = new Set(data.completed);
+    if (excelParsedTasks.length) applyFilters();
+    toast('✅ משימות סומנו כבוצעו מוואטסאפ', 'success');
   }
 };
 es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');
@@ -1482,6 +1496,8 @@ async function sendTestMessage() {
 // ── Excel ─────────────────────────────────────────────────────────────────────
 let excelParsedTasks = [];
 let excelGroupMap = {};
+let sortCol = null;   // 'group' | 'task' | 'date'
+let sortDir = 1;      // 1 = asc, -1 = desc
 
 async function initExcelTab() {
   excelGroupMap = await fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({}));
@@ -1627,14 +1643,40 @@ async function saveGroupMap() {
   }
 }
 
+function setSortCol(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  ['group','task','date'].forEach(c => {
+    const el = document.getElementById('sort-ind-' + c);
+    if (el) el.textContent = c === sortCol ? (sortDir === 1 ? ' ▲' : ' ▼') : '';
+  });
+  applyFilters();
+}
+
 function renderExcelPreview(tasks) {
+  // Sort display copy without mutating the source array
+  let display = tasks;
+  if (sortCol) {
+    display = [...tasks].sort((a, b) => {
+      let va = '', vb = '';
+      if      (sortCol === 'group') { va = a.whatsappGroup || a.excelGroup || ''; vb = b.whatsappGroup || b.excelGroup || ''; }
+      else if (sortCol === 'task')  { va = a.taskText || ''; vb = b.taskText || ''; }
+      else if (sortCol === 'date')  { va = a.dateISO  || ''; vb = b.dateISO  || ''; }
+      if (va < vb) return -sortDir;
+      if (va > vb) return  sortDir;
+      return 0;
+    });
+  }
   const willSend = tasks.filter(t => t.willSend && !t.alreadySent).length;
   const alreadySent = tasks.filter(t => t.alreadySent).length;
   const noMap = tasks.filter(t => !t.willSend).length;
   document.getElementById('preview-will-send').textContent = `✅ ישלח: ${willSend}`;
   document.getElementById('preview-skipped').textContent = `⏭ כבר נשלח: ${alreadySent}`;
   document.getElementById('preview-nomap').textContent = noMap ? `⚠️ ללא מיפוי: ${noMap}` : '';
-  document.getElementById('excel-preview-body').innerHTML = tasks.map((t, i) => {
+  document.getElementById('excel-preview-body').innerHTML = display.map((t, displayIdx) => {
+    // Resolve original index in excelParsedTasks so resend/toggle work correctly after filter+sort
+    const origIdx = excelParsedTasks.findIndex(x => x === t || (x.fingerprint && x.fingerprint === t.fingerprint));
+    const i = origIdx >= 0 ? origIdx : displayIdx;
     let chip, chipClass, resendBtn = '';
     if (t.alreadySent) {
       chip = 'כבר נשלח'; chipClass = 'chip-skip';
@@ -1693,6 +1735,22 @@ async function resendTask(index, btn) {
     chip.textContent = 'כבר נשלח';
     btn.disabled = false;
     toast('שגיאה בשליחה חוזרת', 'error');
+  }
+}
+
+async function sendWeeklySummaryNow(btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ שולח...';
+  try {
+    const res = await fetch(`${API_BASE}/excel/weekly-summary`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) toast('📊 סיכום שבועי נשלח ✓', 'success');
+    else throw new Error(data.error || 'שגיאה');
+  } catch (e) {
+    toast('שגיאה: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 שלח סיכום שבועי עכשיו';
   }
 }
 
