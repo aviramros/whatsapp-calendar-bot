@@ -80,20 +80,48 @@ export function parseExcelPlan(buffer) {
   // Build week label from first and last date
   const weekLabel = `${columns[0].dateLabel} - ${columns[columns.length - 1].dateLabel}`;
 
-  // Scan rows below header, tracking current group via column A
+  // Scan rows below header, tracking current group via column A.
+  // Continuation detection: if column A is empty and the same day-column had content
+  // in the IMMEDIATELY preceding row, the cell is a continuation of that task (not a new task).
   const tasks = [];
   let currentGroup = null;
+  const lastTaskByCol = {}; // col-index → last task object (for continuation merging)
 
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const row = rows[i];
     const cellA = String(row[0] || '').trim();
+    const isGroupChange = cellA !== '';
     if (cellA) currentGroup = cellA;
     if (!currentGroup) continue;
 
+    // A group change means we can no longer continue any previous task
+    if (isGroupChange) {
+      Object.keys(lastTaskByCol).forEach(k => delete lastTaskByCol[k]);
+    }
+
+    const activeColsThisRow = new Set();
+
     for (const { col, dateISO, dateLabel } of columns) {
       const cellText = String(row[col] || '').trim();
-      if (cellText) {
-        tasks.push({ excelGroup: currentGroup, taskText: cellText, dateISO, dateLabel });
+      if (!cellText) continue;
+
+      activeColsThisRow.add(col);
+
+      if (!isGroupChange && lastTaskByCol[col]) {
+        // This cell continues the task started in the previous row for the same day-column
+        lastTaskByCol[col].taskText += '\n' + cellText;
+      } else {
+        // New task
+        const task = { excelGroup: currentGroup, taskText: cellText, dateISO, dateLabel };
+        tasks.push(task);
+        lastTaskByCol[col] = task;
+      }
+    }
+
+    // Columns absent from this row cannot be continued on the next row
+    for (const col of Object.keys(lastTaskByCol)) {
+      if (!activeColsThisRow.has(Number(col))) {
+        delete lastTaskByCol[Number(col)];
       }
     }
   }
