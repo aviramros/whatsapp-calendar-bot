@@ -967,10 +967,13 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         תצוגה מקדימה — <span id="excel-week-label"></span>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
         <span id="preview-will-send" class="chip chip-send"></span>
         <span id="preview-skipped" class="chip chip-skip"></span>
         <span id="preview-nomap" class="chip chip-nomap"></span>
+        <button onclick="resetWeeklyPlan()" title="אפס תכנית שבועית" style="background:none;border:1px solid var(--border);border-radius:7px;padding:4px 9px;cursor:pointer;font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:4px" onmouseover="this.style.borderColor='#ef4444';this.style.color='#ef4444'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+          🗑 אפס
+        </button>
       </div>
     </div>
     <!-- Filter bar -->
@@ -1516,12 +1519,36 @@ function onExcelFileSelected() {
   }
 }
 
+async function resetWeeklyPlan() {
+  if (!confirm('לאפס את כל נתוני התכנית השבועית?\n(משימות שבוצעו, נשלחו ותצוגה מקדימה — יימחקו)')) return;
+  try {
+    await fetch(`${API_BASE}/excel/reset`, { method: 'DELETE' });
+    completedTasks = new Set();
+    excelParsedTasks = [];
+    document.getElementById('excel-preview-card').style.display = 'none';
+    document.getElementById('excel-week-label').textContent = '';
+    document.getElementById('excel-file-status').textContent = '';
+    document.getElementById('excel-file-input').value = '';
+    document.getElementById('parse-btn').disabled = true;
+    const uploadArea = document.getElementById('upload-area');
+    if (uploadArea) uploadArea.style.borderColor = '';
+    updateSavedPlanBadge(null);
+    toast('התכנית השבועית אופסה ✓', 'success');
+  } catch(e) {
+    toast('שגיאה באיפוס: ' + e.message, 'error');
+  }
+}
+
 async function parseExcelFile() {
   const input = document.getElementById('excel-file-input');
   if (!input.files.length) return;
   const btn = document.getElementById('parse-btn');
   btn.disabled = true; btn.textContent = 'מנתח...';
   try {
+    // Clear previous week's completed/sent state before loading new file
+    await fetch(`${API_BASE}/excel/reset`, { method: 'DELETE' });
+    completedTasks = new Set();
+
     const fd = new FormData();
     fd.append('file', input.files[0]);
     const res = await fetch(`${API_BASE}/excel/parse`, { method: 'POST', body: fd });

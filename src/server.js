@@ -716,6 +716,18 @@ app.post('/tasks/toggle', (req, res) => {
   res.json({ ok: true });
 });
 
+// Reset all weekly plan data (preview + completed tasks) — called when uploading a new week's file
+app.delete('/excel/reset', (req, res) => {
+  try {
+    saveCompletedTasks([]);
+    saveExcelPreview(null);
+    log('[Reset] Weekly plan data cleared');
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 const server = app.listen(PORT, () => {
