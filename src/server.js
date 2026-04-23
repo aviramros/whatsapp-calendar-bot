@@ -44,7 +44,8 @@ import {
   startGoogleAuthFlow,
   createOAuthClient,
 } from './calendar.js';
-import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute } from './scheduler.js';
+import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
+         scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo } from './scheduler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -301,6 +302,78 @@ export async function sendTomorrowTasks() {
     log(`[Tomorrow] Reminder ${sent ? 'sent ✅' : 'failed ❌'} to ${recipient}`);
   }
   broadcast('log', `[Tomorrow] Reminder sent to ${sentCount}/${recipients.length} recipients — ${tasks.length} tasks`);
+
+  // Also send per-group reminders (if enabled)
+  await sendTomorrowTasksToGroups();
+}
+
+// ─── Weekly auto-dispatch ─────────────────────────────────────────────────────
+
+export async function autoDispatchWeeklyPlan() {
+  const config = getConfig();
+  if (!config.weeklyDispatchEnabled) { log('[AutoDispatch] Disabled — skipping'); return; }
+
+  // Use preview (has fingerprints + willSend) or fall back to raw plan
+  const preview = getExcelPreview();
+  const plan    = getWeeklyPlan();
+
+  let tasks = [];
+  if (preview?.allTasks?.length) {
+    tasks = preview.allTasks.filter(t => t.whatsappGroup && t.willSend !== false);
+  } else if (plan?.tasks?.length) {
+    tasks = plan.tasks.filter(t => t.whatsappGroup).map(t => ({
+      ...t,
+      fingerprint: `${t.whatsappGroup}|${t.taskText}|${t.dateISO}`,
+    }));
+  }
+
+  if (!tasks.length) { log('[AutoDispatch] No tasks to dispatch'); return; }
+
+  let sent = 0, skipped = 0;
+  for (const task of tasks) {
+    const fp = task.fingerprint;
+    if (!fp || state.has(fp)) { skipped++; continue; }
+    const msgText = `${task.taskText} ${task.dateLabel}`;
+    const ok = await sendWhatsAppMessage(task.whatsappGroup, msgText);
+    if (ok) { state.add(fp); sent++; }
+    else log(`[AutoDispatch] ❌ failed: "${task.taskText}" → ${task.whatsappGroup}`);
+  }
+
+  log(`[AutoDispatch] ✅ Done — sent: ${sent}, skipped: ${skipped}`);
+  broadcast('syncComplete', { created: [], skipped: [], errors: [], autoDispatch: true });
+}
+
+// ─── Daily tomorrow-tasks reminder per WhatsApp group ────────────────────────
+
+async function sendTomorrowTasksToGroups() {
+  const config = getConfig();
+  if (!config.groupRemindersEnabled) return;
+
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) return;
+
+  const tomorrow = getTomorrowISO();
+  const tasks = plan.tasks.filter(t => t.dateISO === tomorrow && t.whatsappGroup);
+  if (!tasks.length) { log('[TomorrowGroups] No group tasks for tomorrow'); return; }
+
+  // Bucket tasks by WhatsApp group
+  const byGroup = {};
+  for (const t of tasks) {
+    (byGroup[t.whatsappGroup] = byGroup[t.whatsappGroup] || []).push(t);
+  }
+
+  const weather  = await fetchWeatherForDate(tomorrow);
+  const dayName  = getHebrewDayName(tomorrow);
+
+  for (const [group, groupTasks] of Object.entries(byGroup)) {
+    let msg = `📋 משימות מחר — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
+    groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+    if (weather) {
+      msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+    }
+    const ok = await sendWhatsAppMessage(group, msg.trim());
+    log(`[TomorrowGroups] Reminder ${ok ? '✅' : '❌'} → "${group}" (${groupTasks.length} tasks)`);
+  }
 }
 
 // ─── Weekly summary ───────────────────────────────────────────────────────────
@@ -425,6 +498,7 @@ app.get('/status', (req, res) => {
     lastRun,
     totalEventsCreated,
     lastSyncResults,
+    weeklyDispatch: getWeeklyDispatchInfo(),
   });
 });
 
@@ -481,12 +555,28 @@ app.post('/config', (req, res) => {
     logoSize: req.body.logoSize !== undefined ? Number(req.body.logoSize) : (current.logoSize ?? 80),
     latitude:  req.body.latitude  !== undefined ? Number(req.body.latitude)  : (current.latitude  ?? 32.0853),
     longitude: req.body.longitude !== undefined ? Number(req.body.longitude) : (current.longitude ?? 34.7818),
+    // Weekly auto-dispatch
+    weeklyDispatchEnabled: req.body.weeklyDispatchEnabled !== undefined ? Boolean(req.body.weeklyDispatchEnabled) : (current.weeklyDispatchEnabled ?? false),
+    weeklyDispatchDay:    req.body.weeklyDispatchDay    !== undefined ? Number(req.body.weeklyDispatchDay)    : (current.weeklyDispatchDay    ?? 6),
+    weeklyDispatchHour:   req.body.weeklyDispatchHour   !== undefined ? Number(req.body.weeklyDispatchHour)   : (current.weeklyDispatchHour   ?? 17),
+    weeklyDispatchMinute: req.body.weeklyDispatchMinute !== undefined ? Number(req.body.weeklyDispatchMinute) : (current.weeklyDispatchMinute ?? 0),
+    // Per-group daily reminders
+    groupRemindersEnabled: req.body.groupRemindersEnabled !== undefined ? Boolean(req.body.groupRemindersEnabled) : (current.groupRemindersEnabled ?? false),
   };
   saveConfig(updated);
-  // Reschedule if time changed
+
+  // Reschedule daily sync if time changed
   if (updated.summaryHour !== getCurrentScheduledHour() || updated.summaryMinute !== getCurrentScheduledMinute()) {
     scheduleAt(updated.summaryHour, updated.summaryMinute, runSync);
   }
+
+  // Reschedule (or stop) weekly dispatch
+  if (updated.weeklyDispatchEnabled) {
+    scheduleWeeklyDispatch(updated.weeklyDispatchDay, updated.weeklyDispatchHour, updated.weeklyDispatchMinute, autoDispatchWeeklyPlan);
+  } else {
+    stopWeeklyDispatch();
+  }
+
   const hh = String(updated.summaryHour).padStart(2,'0');
   const mm = String(updated.summaryMinute ?? 0).padStart(2,'0');
   log(`[Config] Updated: groups=${updated.groups.join(', ')}, window=${updated.syncWindowHours}h, summaryTime=${hh}:${mm}`);
@@ -876,6 +966,12 @@ const server = app.listen(PORT, () => {
   console.log(`\n[Server] Running at http://localhost:${PORT}\n`);
   initWhatsApp();
   startScheduler(runSync);
+
+  // Weekly auto-dispatch (if enabled in config)
+  const cfg = getConfig();
+  if (cfg.weeklyDispatchEnabled) {
+    scheduleWeeklyDispatch(cfg.weeklyDispatchDay, cfg.weeklyDispatchHour, cfg.weeklyDispatchMinute, autoDispatchWeeklyPlan);
+  }
 
   // Weekly summary: every Friday at 20:00 Israel time
   cron.schedule('0 20 * * 5', async () => {

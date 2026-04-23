@@ -838,6 +838,60 @@
     </div>
   </div>
 
+  <!-- ── Auto dispatch & group reminders ── -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      תזמון שליחה אוטומטית
+    </div>
+
+    <!-- Weekly auto-dispatch -->
+    <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-weight:600;font-size:.9rem">📤 שלח תכנית שבועית אוטומטית</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:2px">הבוט ישלח את כל המשימות לקבוצות ביום ובשעה שתבחר</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="weekly-dispatch-enabled" onchange="toggleWeeklyDispatch(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="weekly-dispatch-settings" style="display:none;display:flex;gap:12px;flex-wrap:wrap">
+        <div class="settings-group" style="flex:1;min-width:130px;margin-bottom:0">
+          <label>יום שליחה</label>
+          <select id="weekly-dispatch-day" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)">
+            <option value="0">ראשון</option>
+            <option value="1">שני</option>
+            <option value="2">שלישי</option>
+            <option value="3">רביעי</option>
+            <option value="4">חמישי</option>
+            <option value="5">שישי</option>
+            <option value="6" selected>שבת (מוצ"ש)</option>
+          </select>
+        </div>
+        <div class="settings-group" style="flex:1;min-width:130px;margin-bottom:0">
+          <label>שעת שליחה</label>
+          <input type="time" id="weekly-dispatch-time" value="17:00" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Group reminders -->
+    <div style="border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-weight:600;font-size:.9rem">💬 תזכורת מחר לכל קבוצה</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:2px">כל קבוצת ווטסאפ מקבלת הודעה עם המשימות שלה למחר</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="group-reminders-enabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Theme color ── -->
   <div class="card">
     <div class="card-title">
@@ -1010,7 +1064,7 @@
     </table>
     </div>
     <div style="margin-top:16px;display:flex;gap:8px;align-items:stretch">
-      <button class="btn btn-teal" style="flex:1;padding:12px 6px;font-size:.88rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">שלח לכולם</button>
+      <button class="btn btn-teal" style="flex:1;padding:12px 6px;font-size:.88rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">שלח עכשיו</button>
       <div style="flex:1;display:flex;flex-direction:column;gap:4px">
         <button class="btn btn-gray" style="flex:1;padding:12px 6px;font-size:.88rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">📅 טען ליומן</button>
         <button onclick="resetCalendarState(this)" style="background:none;border:none;font-size:.72rem;color:var(--muted);cursor:pointer;padding:1px 0;text-align:center;white-space:nowrap" title="אחרי מחיקה מהיומן — מאפשר טעינה מחדש">🔄 אפס סטטוס יומן</button>
@@ -1021,6 +1075,10 @@
   </div>
 
   <div class="excel-results" id="excel-results"></div>
+  <div id="auto-dispatch-badge" style="display:none;margin-top:10px;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:8px 14px;font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:7px">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span id="auto-dispatch-badge-text"></span>
+  </div>
 </div>
 
 </div><!-- end #main -->
@@ -1193,6 +1251,18 @@ async function refreshStatus() {
     if (s.lastRun) {
       document.getElementById('last-run').textContent =
         `סנכרון אחרון: ${new Date(s.lastRun).toLocaleString('he-IL')} | סה"כ: ${s.totalEventsCreated}`;
+    }
+
+    // Weekly auto-dispatch badge
+    const badge = document.getElementById('auto-dispatch-badge');
+    const badgeText = document.getElementById('auto-dispatch-badge-text');
+    if (badge && s.weeklyDispatch) {
+      const HE = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+      const { dayName, hour, minute } = s.weeklyDispatch;
+      badgeText.textContent = `שליחה אוטומטית: כל יום ${dayName} ב-${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+      badge.style.display = 'flex';
+    } else if (badge) {
+      badge.style.display = 'none';
     }
   } catch {}
 }
@@ -1475,6 +1545,11 @@ function toggleSummarySection(enabled) {
   const body = document.getElementById('summary-body');
   body.style.opacity = enabled ? '1' : '0.4';
   body.style.pointerEvents = enabled ? '' : 'none';
+}
+
+function toggleWeeklyDispatch(enabled) {
+  const settings = document.getElementById('weekly-dispatch-settings');
+  if (settings) settings.style.display = enabled ? 'flex' : 'none';
 }
 
 async function sendTestMessage() {
@@ -2113,6 +2188,16 @@ async function loadSettings() {
     const lonEl = document.getElementById('setting-longitude');
     if (latEl) latEl.value = cfg.latitude  ?? 32.0853;
     if (lonEl) lonEl.value = cfg.longitude ?? 34.7818;
+    // Weekly auto-dispatch
+    const wdEnabled = cfg.weeklyDispatchEnabled ?? false;
+    document.getElementById('weekly-dispatch-enabled').checked = wdEnabled;
+    toggleWeeklyDispatch(wdEnabled);
+    document.getElementById('weekly-dispatch-day').value = cfg.weeklyDispatchDay ?? 6;
+    const wh = String(cfg.weeklyDispatchHour ?? 17).padStart(2,'0');
+    const wm = String(cfg.weeklyDispatchMinute ?? 0).padStart(2,'0');
+    document.getElementById('weekly-dispatch-time').value = `${wh}:${wm}`;
+    // Group reminders
+    document.getElementById('group-reminders-enabled').checked = cfg.groupRemindersEnabled ?? false;
   } catch {}
 }
 
@@ -2127,6 +2212,11 @@ async function saveSettings() {
     themeColor: document.getElementById('theme-color-picker')?.value || '#3DBDB4',
     latitude:  parseFloat(document.getElementById('setting-latitude')?.value)  || 32.0853,
     longitude: parseFloat(document.getElementById('setting-longitude')?.value) || 34.7818,
+    weeklyDispatchEnabled: document.getElementById('weekly-dispatch-enabled').checked,
+    weeklyDispatchDay:    parseInt(document.getElementById('weekly-dispatch-day').value, 10),
+    weeklyDispatchHour:   parseInt((document.getElementById('weekly-dispatch-time').value || '17:00').split(':')[0], 10),
+    weeklyDispatchMinute: parseInt((document.getElementById('weekly-dispatch-time').value || '17:00').split(':')[1], 10),
+    groupRemindersEnabled: document.getElementById('group-reminders-enabled').checked,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

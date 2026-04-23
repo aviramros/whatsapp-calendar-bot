@@ -15,6 +15,13 @@ const DEFAULTS = {
   summaryMinute: 0,
   themeColor: '#3DBDB4',
   logoData: null,
+  // Weekly auto-dispatch (send plan to groups automatically)
+  weeklyDispatchEnabled: false,
+  weeklyDispatchDay: 6,      // 0=Sun … 6=Sat
+  weeklyDispatchHour: 17,
+  weeklyDispatchMinute: 0,
+  // Daily group reminders (each group gets its own tomorrow-tasks message)
+  groupRemindersEnabled: false,
   logoOrientation: 'landscape',
   latitude: 32.0853,   // default: Tel Aviv area
   longitude: 34.7818,
