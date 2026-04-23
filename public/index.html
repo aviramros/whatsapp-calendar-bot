@@ -396,6 +396,18 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 
+    /* ── Excel filters ── */
+    .filter-bar { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; align-items:center; }
+    .filter-select {
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: .84rem; background: var(--card); color: var(--text);
+      cursor: pointer; outline: none; transition: border .2s;
+    }
+    .filter-select:focus { border-color: var(--teal); }
+    .filter-label { display:flex; align-items:center; gap:5px; font-size:.84rem; cursor:pointer; color:var(--text); }
+    body.dark .filter-select { background: #1a2234; border-color: var(--border); }
+    #filter-clear { display:none; }
+
     /* ── Weather card ── */
     .weather-day {
       background: #f9fafb; border-radius: 10px; padding: 12px 10px;
@@ -960,6 +972,24 @@
         <span id="preview-nomap" class="chip chip-nomap"></span>
       </div>
     </div>
+    <!-- Filter bar -->
+    <div class="filter-bar" id="excel-filter-bar">
+      <select class="filter-select" id="filter-date"   onchange="applyFilters()"><option value="">כל התאריכים</option></select>
+      <select class="filter-select" id="filter-group"  onchange="applyFilters()"><option value="">כל הקבוצות</option></select>
+      <select class="filter-select" id="filter-status" onchange="applyFilters()">
+        <option value="">כל הסטטוסים</option>
+        <option value="willSend">ישלח ✅</option>
+        <option value="alreadySent">כבר נשלח ⏭</option>
+        <option value="noMap">ללא מיפוי ⚠️</option>
+      </select>
+      <select class="filter-select" id="filter-done" onchange="applyFilters()">
+        <option value="">כל המשימות</option>
+        <option value="done">בוצעו ✓</option>
+        <option value="pending">טרם בוצעו</option>
+      </select>
+      <button id="filter-clear" class="btn btn-gray" style="font-size:.8rem;padding:5px 12px" onclick="clearFilters()">✕ נקה</button>
+    </div>
+
     <div class="excel-table-wrap">
     <table class="excel-table">
       <thead><tr><th style="width:36px">✓</th><th>קבוצה</th><th>מטלה</th><th>תאריך</th><th>סטטוס</th></tr></thead>
@@ -1243,7 +1273,7 @@ es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let calDay   = new Date().getDate();
-let calView  = 'week'; // 'week' | 'day' (month removed)
+let calView  = window.innerWidth <= 640 ? 'day' : 'week'; // mobile defaults to day
 let calEventsCache = [];
 
 const DAY_NAMES_HE   = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
@@ -1291,7 +1321,7 @@ async function loadCalendar() {
     const { events } = await fetch(`${API_BASE}/calendar-events`).then(r => r.json());
     calEventsCache = events || [];
   } catch { calEventsCache = []; }
-  renderCalendar();
+  setCalView(calView); // syncs toggle buttons + renders
 }
 
 function renderCalendar() {
@@ -1464,6 +1494,7 @@ async function loadSavedPreview() {
     excelParsedTasks = preview.allTasks;
     document.getElementById('excel-week-label').textContent = preview.weekLabel || '';
     document.getElementById('excel-preview-card').style.display = '';
+    populateFilters(excelParsedTasks);
     renderExcelPreview(excelParsedTasks);
   } catch {}
 }
@@ -1500,6 +1531,7 @@ async function parseExcelFile() {
     newGroups.forEach(g => { if (!(g in excelGroupMap)) excelGroupMap[g] = g; });
     renderGroupMapTable(newGroups);
     document.getElementById('excel-week-label').textContent = data.weekLabel;
+    populateFilters(data.tasks);
     renderExcelPreview(data.tasks);
     document.getElementById('excel-preview-card').style.display = 'block';
 
@@ -1559,6 +1591,7 @@ async function saveGroupMap() {
   if (excelParsedTasks.length) {
     const updated = excelParsedTasks.map(t => ({ ...t, whatsappGroup: map[t.excelGroup] || '', willSend: !!(map[t.excelGroup]) }));
     excelParsedTasks = updated;
+    populateFilters(updated);
     renderExcelPreview(updated);
   }
 }
@@ -1999,6 +2032,62 @@ async function saveSettings() {
   } catch {
     toast('שגיאה בשמירת הגדרות', 'error');
   }
+}
+
+// ── Excel filters ────────────────────────────────────────────────────────────
+function populateFilters(tasks) {
+  const curDate  = document.getElementById('filter-date')?.value;
+  const curGroup = document.getElementById('filter-group')?.value;
+
+  const dates  = [...new Set(tasks.map(t => t.dateISO))].sort();
+  const groups = [...new Set(tasks.map(t => t.whatsappGroup || t.excelGroup))].filter(Boolean).sort();
+
+  const dateEl  = document.getElementById('filter-date');
+  const groupEl = document.getElementById('filter-group');
+  if (!dateEl || !groupEl) return;
+
+  dateEl.innerHTML  = '<option value="">כל התאריכים</option>' +
+    dates.map(d => {
+      const lbl = tasks.find(t => t.dateISO === d)?.dateLabel || d;
+      return `<option value="${d}"${d === curDate ? ' selected' : ''}>${esc(lbl)}</option>`;
+    }).join('');
+
+  groupEl.innerHTML = '<option value="">כל הקבוצות</option>' +
+    groups.map(g => `<option value="${esc(g)}"${g === curGroup ? ' selected' : ''}>${esc(g)}</option>`).join('');
+}
+
+function applyFilters() {
+  const dateVal   = document.getElementById('filter-date')?.value   || '';
+  const groupVal  = document.getElementById('filter-group')?.value  || '';
+  const statusVal = document.getElementById('filter-status')?.value || '';
+  const doneVal   = document.getElementById('filter-done')?.value   || '';
+
+  const active = dateVal || groupVal || statusVal || doneVal;
+  const clearBtn = document.getElementById('filter-clear');
+  if (clearBtn) clearBtn.style.display = active ? '' : 'none';
+
+  const filtered = excelParsedTasks.filter(t => {
+    if (dateVal  && t.dateISO !== dateVal)  return false;
+    if (groupVal && (t.whatsappGroup || t.excelGroup) !== groupVal) return false;
+    if (statusVal === 'willSend'    && (!t.willSend || t.alreadySent)) return false;
+    if (statusVal === 'alreadySent' && !t.alreadySent)                return false;
+    if (statusVal === 'noMap'       && t.willSend)                    return false;
+    if (doneVal   === 'done'    && !completedTasks.has(t.fingerprint)) return false;
+    if (doneVal   === 'pending' &&  completedTasks.has(t.fingerprint)) return false;
+    return true;
+  });
+
+  renderExcelPreview(filtered);
+}
+
+function clearFilters() {
+  ['filter-date','filter-group','filter-status','filter-done'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const clearBtn = document.getElementById('filter-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  renderExcelPreview(excelParsedTasks);
 }
 
 // ── Weather ───────────────────────────────────────────────────────────────────
