@@ -1009,26 +1009,16 @@
       <tbody id="excel-preview-body"></tbody>
     </table>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-teal" style="flex:1;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">
-          שלח לכולם
-        </button>
-        <div style="display:flex;flex-direction:column;gap:4px;flex:1">
-          <button class="btn btn-gray" style="width:100%;padding:13px;font-size:1rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">
-            📅 טען ליומן
-          </button>
-          <button onclick="resetCalendarState(this)" style="background:none;border:none;font-size:.75rem;color:var(--muted);cursor:pointer;padding:2px 0;text-align:center" title="אחרי מחיקה מהיומן — אפשר טעינה מחדש">
-            🔄 אפס סטטוס יומן
-          </button>
-        </div>
+    <div style="margin-top:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn btn-teal" style="flex:1;min-width:120px;padding:12px 10px;font-size:.95rem;border-radius:10px" id="dispatch-btn" onclick="dispatchExcel(false)">שלח לכולם</button>
+        <button class="btn btn-gray" style="flex:1;min-width:120px;padding:12px 10px;font-size:.95rem;border-radius:10px" id="dispatch-cal-btn" onclick="dispatchExcel(true)">📅 טען ליומן</button>
+        <button class="btn btn-gray" style="flex:1;min-width:120px;padding:12px 10px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">↩ שלח הכל שוב</button>
+        <button class="btn btn-gray" style="flex:1;min-width:120px;padding:12px 10px;font-size:.95rem;border-radius:10px" onclick="sendWeeklySummaryNow(this)">📊 סיכום שבועי</button>
       </div>
-      <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">
-        ↩ שלח הכל שוב
-      </button>
-      <button class="btn btn-gray" style="width:100%;padding:11px;font-size:.95rem;border-radius:10px;margin-top:2px" onclick="sendWeeklySummaryNow(this)">
-        📊 שלח סיכום שבועי עכשיו
-      </button>
+      <div style="margin-top:6px;text-align:center">
+        <button onclick="resetCalendarState(this)" style="background:none;border:none;font-size:.78rem;color:var(--muted);cursor:pointer;padding:2px 8px;text-decoration:underline;text-underline-offset:2px" title="אחרי מחיקה מהיומן — מאפשר טעינה מחדש">🔄 אפס סטטוס יומן</button>
+      </div>
     </div>
   </div>
 
