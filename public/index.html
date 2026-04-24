@@ -1593,7 +1593,15 @@ async function loadSavedPreview() {
   try {
     const preview = await fetch(`${API_BASE}/excel/preview`).then(r => r.json());
     if (!preview?.allTasks?.length) return;
-    excelParsedTasks = preview.allTasks;
+    // Re-apply saved group map — tasks may have been saved before mapping was set
+    excelParsedTasks = preview.allTasks.map(t => {
+      const mapped = excelGroupMap[t.excelGroup] || '';
+      return {
+        ...t,
+        whatsappGroup: t.whatsappGroup || mapped,
+        willSend: t.willSend !== undefined ? t.willSend : !!mapped,
+      };
+    });
     document.getElementById('excel-week-label').textContent = preview.weekLabel || '';
     document.getElementById('excel-preview-card').style.display = '';
     populateFilters(excelParsedTasks);
@@ -1719,6 +1727,9 @@ async function saveGroupMap() {
     excelParsedTasks = updated;
     populateFilters(updated);
     renderExcelPreview(updated);
+    // Persist updated tasks (with whatsappGroup) so the mapping survives page refresh
+    const weekLabel = document.getElementById('excel-week-label')?.textContent || '';
+    await savePlanToServer(weekLabel, updated);
   }
 }
 
