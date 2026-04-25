@@ -1527,7 +1527,8 @@ let waGroupsList = []; // WhatsApp groups fetched from server
 async function fetchWAGroups() {
   try {
     const { groups } = await fetch(`${API_BASE}/whatsapp/groups`).then(r => r.json());
-    waGroupsList = groups || [];
+    // groups is [{name, id, label}] — normalize for backward compat with plain strings
+    waGroupsList = (groups || []).map(g => typeof g === 'string' ? { name: g, id: g, label: g } : g);
   } catch { waGroupsList = []; }
   renderWAGroupCheckboxes();
   // Re-render group map table if it's visible
@@ -1547,10 +1548,10 @@ function renderWAGroupCheckboxes() {
   }
   loading.style.display = 'none';
   el.innerHTML = waGroupsList.map(g => {
-    const checked = settingsGroups.includes(g) ? 'checked' : '';
+    const checked = settingsGroups.includes(g.name) ? 'checked' : '';
     return `<label style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.88rem;white-space:nowrap;background:var(--card)">
-      <input type="checkbox" ${checked} onchange="toggleWAGroup('${esc(g)}', this.checked)" style="accent-color:var(--teal);width:15px;height:15px">
-      ${esc(g)}
+      <input type="checkbox" ${checked} onchange="toggleWAGroup('${esc(g.name)}', this.checked)" style="accent-color:var(--teal);width:15px;height:15px">
+      ${esc(g.label)}
     </label>`;
   }).join('');
 }
@@ -1727,20 +1728,25 @@ function renderGroupMapTable(groups) {
   const selectStyle = 'width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;background:var(--card);color:var(--text)';
 
   tbody.innerHTML = groups.map(g => {
-    const current = excelGroupMap[g] || '';
-    // Build options: blank + all WA groups; if current value not in list add it too
-    const allOpts = waGroupsList.length ? [...waGroupsList] : (current ? [current] : []);
-    if (current && !allOpts.includes(current)) allOpts.unshift(current);
+    const current = excelGroupMap[g] || ''; // now stores group ID (or legacy name)
+    // Build options from waGroupsList [{name,id,label}]; if current not in list, keep as legacy option
+    const allOpts = waGroupsList.length ? [...waGroupsList] : [];
+    if (current && !allOpts.find(wg => wg.id === current)) {
+      allOpts.unshift({ name: current, id: current, label: current }); // legacy name fallback
+    }
     const opts = `<option value="">-- בחר קבוצה --</option>` +
-      allOpts.map(wg => `<option value="${esc(wg)}" ${wg === current ? 'selected' : ''}>${esc(wg)}</option>`).join('');
+      allOpts.map(wg => `<option value="${esc(wg.id)}" ${wg.id === current ? 'selected' : ''}>${esc(wg.label)}</option>`).join('');
     const btnId = `send-tmrw-${g.replace(/\s+/g,'_')}`;
     const btnDisabled = current ? '' : 'disabled';
+    // Find display name for the currently selected group
+    const currentEntry = waGroupsList.find(wg => wg.id === current);
+    const currentName = currentEntry?.name || current;
     return `<tr>
       <td style="font-weight:600;min-width:120px">${esc(g)}</td>
       <td style="color:var(--muted);padding:0 6px">→</td>
       <td><select data-excel-group="${esc(g)}" style="${selectStyle}">${opts}</select></td>
       <td style="padding-right:8px;white-space:nowrap">
-        <button id="${btnId}" ${btnDisabled} onclick="sendTomorrowToGroup('${esc(current)}', this)"
+        <button id="${btnId}" ${btnDisabled} onclick="sendTomorrowToGroup('${esc(current)}', '${esc(currentName)}', this)"
           style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;opacity:${current?'1':'0.4'}">
           📤 שלח למחר
         </button>
@@ -1749,8 +1755,8 @@ function renderGroupMapTable(groups) {
   }).join('');
 }
 
-async function sendTomorrowToGroup(whatsappGroup, btn) {
-  if (!whatsappGroup) return;
+async function sendTomorrowToGroup(whatsappGroupId, whatsappGroupName, btn) {
+  if (!whatsappGroupId) return;
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳...';
@@ -1758,7 +1764,7 @@ async function sendTomorrowToGroup(whatsappGroup, btn) {
     const res = await fetch(`${API_BASE}/excel/send-tomorrow-group`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ whatsappGroup })
+      body: JSON.stringify({ whatsappGroupId, whatsappGroup: whatsappGroupName })
     });
     const data = await res.json();
     if (data.ok) {
@@ -1784,7 +1790,12 @@ async function saveGroupMap() {
   const fb = document.getElementById('map-saved-feedback');
   fb.style.display = 'inline'; setTimeout(() => fb.style.display = 'none', 2000);
   if (excelParsedTasks.length) {
-    const updated = excelParsedTasks.map(t => ({ ...t, whatsappGroup: map[t.excelGroup] || '', willSend: !!(map[t.excelGroup]) }));
+    const updated = excelParsedTasks.map(t => {
+      const groupId   = map[t.excelGroup] || '';
+      const groupEntry = waGroupsList.find(wg => wg.id === groupId);
+      const groupName  = groupEntry?.name || groupId; // name for display; fallback to id for legacy
+      return { ...t, whatsappGroup: groupName, whatsappGroupId: groupId, willSend: !!groupId };
+    });
     excelParsedTasks = updated;
     populateFilters(updated);
     renderExcelPreview(updated);

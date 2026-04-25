@@ -27,7 +27,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import QRCode from 'qrcode';
 
-import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups } from './whatsapp.js';
+import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
 import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview } from './config.js';
@@ -332,7 +332,8 @@ export async function autoDispatchWeeklyPlan() {
     const fp = task.fingerprint;
     if (!fp || state.has(fp)) { skipped++; continue; }
     const msgText = `${task.taskText} ${task.dateLabel}`;
-    const ok = await sendWhatsAppMessage(task.whatsappGroup, msgText);
+    const target = task.whatsappGroupId || task.whatsappGroup;
+    const ok = await sendWhatsAppMessage(target, msgText);
     if (ok) { state.add(fp); sent++; }
     else log(`[AutoDispatch] ❌ failed: "${task.taskText}" → ${task.whatsappGroup}`);
   }
@@ -354,23 +355,24 @@ async function sendTomorrowTasksToGroups() {
   const tasks = plan.tasks.filter(t => t.dateISO === tomorrow && t.whatsappGroup);
   if (!tasks.length) { log('[TomorrowGroups] No group tasks for tomorrow'); return; }
 
-  // Bucket tasks by WhatsApp group
+  // Bucket tasks by WhatsApp group — key is ID when available, else name
   const byGroup = {};
   for (const t of tasks) {
-    (byGroup[t.whatsappGroup] = byGroup[t.whatsappGroup] || []).push(t);
+    const key = t.whatsappGroupId || t.whatsappGroup;
+    (byGroup[key] = byGroup[key] || { sendKey: key, displayName: t.whatsappGroup, tasks: [] }).tasks.push(t);
   }
 
   const weather  = await fetchWeatherForDate(tomorrow);
   const dayName  = getHebrewDayName(tomorrow);
 
-  for (const [group, groupTasks] of Object.entries(byGroup)) {
+  for (const { sendKey, displayName, tasks: groupTasks } of Object.values(byGroup)) {
     let msg = `📋 משימות מחר — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
     groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
     if (weather) {
       msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
     }
-    const ok = await sendWhatsAppMessage(group, msg.trim());
-    log(`[TomorrowGroups] Reminder ${ok ? '✅' : '❌'} → "${group}" (${groupTasks.length} tasks)`);
+    const ok = await sendWhatsAppMessage(sendKey, msg.trim());
+    log(`[TomorrowGroups] Reminder ${ok ? '✅' : '❌'} → "${displayName}" (${groupTasks.length} tasks)`);
   }
 }
 
@@ -502,7 +504,9 @@ app.get('/status', (req, res) => {
 
 // ── Bot On/Off ─────────────────────────────────────────────────────────────────
 app.get('/whatsapp/groups', (req, res) => {
-  res.json({ groups: getAvailableGroups() });
+  // Returns detailed list [{name, id, label}] — duplicate names get a short ID suffix in label
+  const detail = getGroupsWithDetails();
+  res.json({ groups: detail.length ? detail : getAvailableGroups().map(n => ({ name: n, id: n, label: n })) });
 });
 
 app.post('/bot/start', (req, res) => {
@@ -963,15 +967,25 @@ app.delete('/state/calendar', (req, res) => {
 
 // Send tomorrow's tasks for a single group (test button in group-map UI)
 app.post('/excel/send-tomorrow-group', async (req, res) => {
-  const { whatsappGroup } = req.body;
-  if (!whatsappGroup) return res.status(400).json({ ok: false, error: 'whatsappGroup missing' });
+  const { whatsappGroup, whatsappGroupId } = req.body;
+  // whatsappGroupId = chat ID (e.g. "120363...@g.us")  — preferred
+  // whatsappGroup   = group name or legacy fallback
+  const sendTarget = whatsappGroupId || whatsappGroup;
+  if (!sendTarget) return res.status(400).json({ ok: false, error: 'whatsappGroup missing' });
 
   const plan = getWeeklyPlan();
   const tomorrow = getTomorrowISO();
-  const tasks = (plan?.tasks || []).filter(t => t.dateISO === tomorrow && t.whatsappGroup === whatsappGroup);
+
+  // Match by ID first, then by name (backward compat for tasks saved before ID support)
+  const tasks = (plan?.tasks || []).filter(t =>
+    t.dateISO === tomorrow && (
+      (whatsappGroupId && t.whatsappGroupId === whatsappGroupId) ||
+      (t.whatsappGroup && t.whatsappGroup === whatsappGroup)
+    )
+  );
 
   if (!tasks.length) {
-    return res.json({ ok: false, error: `אין משימות למחר עבור "${whatsappGroup}"` });
+    return res.json({ ok: false, error: `אין משימות למחר עבור "${whatsappGroup || whatsappGroupId}"` });
   }
 
   const dayName  = getHebrewDayName(tomorrow);
@@ -982,7 +996,8 @@ app.post('/excel/send-tomorrow-group', async (req, res) => {
     msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
   }
 
-  const sent = await sendWhatsAppMessage(whatsappGroup, msg.trim());
+  // sendTarget is a chat ID (@g.us) — sendWhatsAppMessage will use it directly
+  const sent = await sendWhatsAppMessage(sendTarget, msg.trim());
   log(`[TestSend] Tomorrow tasks ${sent ? '✅' : '❌'} → "${whatsappGroup}" (${tasks.length} tasks)`);
   res.json({ ok: sent, tasks: tasks.length, error: sent ? null : 'שליחה נכשלה — ודא שהבוט מחובר' });
 });

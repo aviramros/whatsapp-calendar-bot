@@ -12,7 +12,8 @@ let client = null;
 let isReady = false;
 let currentQr = null;
 let botEnabled = true; // controlled by UI on/off toggle
-let groupIdCache = {}; // { groupName: chatId._serialized }
+let groupIdCache = {}; // { groupName: chatId._serialized } — last entry wins for duplicate names
+let groupDetailsCache = []; // [{ name, id }] — ALL groups, preserves duplicates
 
 export function isBotEnabled() { return botEnabled; }
 
@@ -36,6 +37,19 @@ export function getClient() {
 
 export function getAvailableGroups() {
   return Object.keys(groupIdCache).sort();
+}
+
+/**
+ * Returns all groups with labels. Duplicate names get a short ID suffix
+ * so the user can distinguish between them in dropdowns.
+ */
+export function getGroupsWithDetails() {
+  const counts = {};
+  groupDetailsCache.forEach(g => { counts[g.name] = (counts[g.name] || 0) + 1; });
+  return groupDetailsCache.map(g => {
+    const suffix = counts[g.name] > 1 ? ` [${g.id.split('@')[0].slice(-6)}]` : '';
+    return { name: g.name, id: g.id, label: g.name + suffix };
+  });
 }
 
 export function getBotPhoneNumber() {
@@ -174,10 +188,16 @@ async function buildGroupCache() {
       new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 120000))
     ]);
     groupIdCache = {};
+    groupDetailsCache = [];
     for (const chat of chats) {
-      if (chat.isGroup) groupIdCache[chat.name.trim()] = chat.id._serialized;
+      if (chat.isGroup) {
+        const name = chat.name.trim();
+        const id = chat.id._serialized;
+        groupIdCache[name] = id; // last one wins for duplicate names
+        groupDetailsCache.push({ name, id });
+      }
     }
-    log(`Group cache ready: ${Object.keys(groupIdCache).length} groups indexed`);
+    log(`Group cache ready: ${groupDetailsCache.length} groups indexed (${Object.keys(groupIdCache).length} unique names)`);
   } catch (err) {
     log('Group cache build failed: ' + err.message + ' — will retry on next sync');
   }
@@ -236,8 +256,8 @@ export async function fetchRecentMessages(hours) {
 }
 
 /**
- * Sends a WhatsApp message to a phone number or group name.
- * @param {string} recipient - phone number (e.g. "972501234567") or exact group name
+ * Sends a WhatsApp message to a phone number, group name, or direct chat ID.
+ * @param {string} recipient - group chat ID (e.g. "120363...@g.us"), phone number, or group name
  * @param {string} text
  */
 export async function sendWhatsAppMessage(recipient, text) {
@@ -246,7 +266,12 @@ export async function sendWhatsAppMessage(recipient, text) {
     return false;
   }
   try {
-    // Try as group name using cache first
+    // If recipient is already a raw chat ID (contains '@'), use it directly — most reliable
+    if (recipient.includes('@')) {
+      await client.sendMessage(recipient.trim(), text);
+      return true;
+    }
+    // Try as group name using cache
     const cachedId = groupIdCache[recipient.trim()];
     if (cachedId) {
       await client.sendMessage(cachedId, text);
