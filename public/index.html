@@ -1722,7 +1722,7 @@ async function updateSavedPlanBadge(weekLabel) {
 
 function renderGroupMapTable(groups) {
   const tbody = document.querySelector('#group-map-table tbody');
-  if (!groups.length) { tbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted)">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>'; return; }
+  if (!groups.length) { tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>'; return; }
 
   const selectStyle = 'width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;background:var(--card);color:var(--text)';
 
@@ -1733,12 +1733,46 @@ function renderGroupMapTable(groups) {
     if (current && !allOpts.includes(current)) allOpts.unshift(current);
     const opts = `<option value="">-- בחר קבוצה --</option>` +
       allOpts.map(wg => `<option value="${esc(wg)}" ${wg === current ? 'selected' : ''}>${esc(wg)}</option>`).join('');
+    const btnId = `send-tmrw-${g.replace(/\s+/g,'_')}`;
+    const btnDisabled = current ? '' : 'disabled';
     return `<tr>
       <td style="font-weight:600;min-width:120px">${esc(g)}</td>
       <td style="color:var(--muted);padding:0 6px">→</td>
       <td><select data-excel-group="${esc(g)}" style="${selectStyle}">${opts}</select></td>
+      <td style="padding-right:8px;white-space:nowrap">
+        <button id="${btnId}" ${btnDisabled} onclick="sendTomorrowToGroup('${esc(current)}', this)"
+          style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;opacity:${current?'1':'0.4'}">
+          📤 שלח למחר
+        </button>
+      </td>
     </tr>`;
   }).join('');
+}
+
+async function sendTomorrowToGroup(whatsappGroup, btn) {
+  if (!whatsappGroup) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳...';
+  try {
+    const res = await fetch(`${API_BASE}/excel/send-tomorrow-group`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ whatsappGroup })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      btn.textContent = `✅ נשלח (${data.tasks})`;
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+    } else {
+      btn.textContent = '❌ נכשל';
+      alert(data.error || 'שגיאה בשליחה');
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+    }
+  } catch (e) {
+    btn.textContent = '❌ שגיאה';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  }
 }
 
 async function saveGroupMap() {

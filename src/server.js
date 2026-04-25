@@ -961,6 +961,32 @@ app.delete('/state/calendar', (req, res) => {
   }
 });
 
+// Send tomorrow's tasks for a single group (test button in group-map UI)
+app.post('/excel/send-tomorrow-group', async (req, res) => {
+  const { whatsappGroup } = req.body;
+  if (!whatsappGroup) return res.status(400).json({ ok: false, error: 'whatsappGroup missing' });
+
+  const plan = getWeeklyPlan();
+  const tomorrow = getTomorrowISO();
+  const tasks = (plan?.tasks || []).filter(t => t.dateISO === tomorrow && t.whatsappGroup === whatsappGroup);
+
+  if (!tasks.length) {
+    return res.json({ ok: false, error: `אין משימות למחר עבור "${whatsappGroup}"` });
+  }
+
+  const dayName  = getHebrewDayName(tomorrow);
+  const weather  = await fetchWeatherForDate(tomorrow);
+  let msg = `📋 משימות מחר — ${dayName} ${tasks[0].dateLabel}:\n\n`;
+  tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+  if (weather) {
+    msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+  }
+
+  const sent = await sendWhatsAppMessage(whatsappGroup, msg.trim());
+  log(`[TestSend] Tomorrow tasks ${sent ? '✅' : '❌'} → "${whatsappGroup}" (${tasks.length} tasks)`);
+  res.json({ ok: sent, tasks: tasks.length, error: sent ? null : 'שליחה נכשלה — ודא שהבוט מחובר' });
+});
+
 // Manual trigger for weekly summary (from dashboard)
 app.post('/excel/weekly-summary', async (req, res) => {
   try {
