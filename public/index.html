@@ -694,6 +694,23 @@
 
   </div>
 
+  <!-- ── Admin notifications ── -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      לוגים למנהל מערכת
+    </div>
+    <p style="font-size:.84rem;color:var(--muted);margin-bottom:14px">קבל עדכוני WhatsApp אישיים על פעילות הבוט — חיבור, שליחות ושגיאות. הזן מספר בפורמט בינלאומי (ללא +).</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="tel" id="admin-phone" placeholder="972501234567"
+        style="flex:1;min-width:160px;max-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);font-size:.93rem;direction:ltr" />
+      <button class="btn btn-teal" onclick="saveAdminPhone(this)" style="white-space:nowrap;font-size:.85rem">💾 שמור</button>
+      <button class="btn btn-gray" onclick="sendAdminTestNotification(this)" style="white-space:nowrap;font-size:.85rem">📱 שלח בדיקה</button>
+      <span id="admin-phone-feedback" style="display:none;font-size:.82rem;font-weight:600"></span>
+    </div>
+    <p style="font-size:.78rem;color:var(--muted);margin-top:8px">אירועים שיישלחו: חיבור בוט ✅ · שליחה אוטומטית 📤 · תזכורות יומיות ⏰ · סנכרון לוח שנה 📅</p>
+  </div>
+
   <div class="card">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -834,25 +851,6 @@
         <label>קו אורך (Longitude)</label>
         <input type="number" id="setting-longitude" step="0.0001" placeholder="34.7818" style="max-width:180px" />
       </div>
-    </div>
-  </div>
-
-  <!-- ── Admin notifications ── -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-      לוגים למנהל מערכת
-    </div>
-    <p style="font-size:.84rem;color:var(--muted);margin-bottom:14px">קבל עדכוני WhatsApp אישיים על פעילות הבוט — חיבור, שליחות ושגיאות. הזן מספר בפורמט בינלאומי (ללא +).</p>
-    <div class="settings-group">
-      <label>מספר טלפון מנהל (לדוגמא: 972501234567)</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="tel" id="admin-phone" placeholder="972501234567" dir="ltr"
-          style="flex:1;max-width:220px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);font-size:.93rem;direction:ltr" />
-        <button class="btn btn-gray" onclick="sendAdminTestNotification(this)" style="white-space:nowrap;font-size:.85rem">📱 בדיקה</button>
-        <span id="admin-phone-feedback" style="display:none;font-size:.82rem;font-weight:600"></span>
-      </div>
-      <p style="font-size:.78rem;color:var(--muted);margin-top:6px">אירועים שיישלחו: חיבור בוט ✅ · שליחה אוטומטית 📤 · תזכורות יומיות ⏰ · סנכרון לוח שנה 📅</p>
     </div>
   </div>
 
@@ -1208,6 +1206,7 @@ function _doShowTab(name) {
   if (name === 'calendar') loadCalendar();
   if (name === 'settings') loadSettings();
   if (name === 'excel') initExcelTab();
+  if (name === 'dashboard') loadAdminPhone();
 }
 
 function showTab(name) {
@@ -1597,14 +1596,38 @@ function toggleGroupReminders(enabled) {
   if (settings) settings.style.display = enabled ? 'block' : 'none';
 }
 
+async function loadAdminPhone() {
+  try {
+    const cfg = await fetch(`${API_BASE}/config`).then(r => r.json());
+    const el = document.getElementById('admin-phone');
+    if (el) el.value = cfg.adminPhone || '';
+  } catch {}
+}
+
+async function saveAdminPhone(btn) {
+  const phone = (document.getElementById('admin-phone')?.value || '').trim().replace(/^\+/, '');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    await fetch(`${API_BASE}/config`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminPhone: phone })
+    });
+    const fb = document.getElementById('admin-phone-feedback');
+    fb.style.display = 'inline'; fb.style.color = 'var(--teal, #3DBDB4)';
+    fb.textContent = '✅ נשמר';
+    setTimeout(() => { fb.style.display = 'none'; }, 2500);
+  } catch { alert('שגיאה בשמירה'); }
+  btn.disabled = false; btn.textContent = orig;
+}
+
 async function sendAdminTestNotification(btn) {
-  // First save the phone if it was just typed
   const phone = (document.getElementById('admin-phone')?.value || '').trim().replace(/^\+/, '');
   if (!phone) { alert('הזן מספר טלפון קודם'); return; }
   const orig = btn.textContent;
   btn.disabled = true; btn.textContent = '⏳...';
   try {
-    // Save current settings so the server knows the phone number
+    // Make sure the phone is saved first
     await fetch(`${API_BASE}/config`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adminPhone: phone })
@@ -1612,7 +1635,7 @@ async function sendAdminTestNotification(btn) {
     const data = await fetch(`${API_BASE}/admin/test-notify`, { method: 'POST' }).then(r => r.json());
     const fb = document.getElementById('admin-phone-feedback');
     fb.style.display = 'inline';
-    fb.style.color = data.ok ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)';
+    fb.style.color = data.ok ? '#22c55e' : '#ef4444';
     fb.textContent = data.ok ? '✅ נשלח!' : '❌ ' + (data.error || 'נכשל');
     setTimeout(() => { fb.style.display = 'none'; }, 4000);
   } catch { alert('שגיאה בשליחה'); }
@@ -2339,9 +2362,6 @@ async function loadSettings() {
     const grh = String(cfg.groupRemindersHour ?? 7).padStart(2,'0');
     const grm = String(cfg.groupRemindersMinute ?? 0).padStart(2,'0');
     document.getElementById('group-reminders-time').value = `${grh}:${grm}`;
-    // Admin phone
-    const adminEl = document.getElementById('admin-phone');
-    if (adminEl) adminEl.value = cfg.adminPhone || '';
   } catch {}
 }
 
@@ -2363,7 +2383,6 @@ async function saveSettings() {
     groupRemindersEnabled: document.getElementById('group-reminders-enabled').checked,
     groupRemindersHour:   parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[0], 10),
     groupRemindersMinute: parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[1], 10),
-    adminPhone: (document.getElementById('admin-phone')?.value || '').trim().replace(/^\+/, ''),
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
