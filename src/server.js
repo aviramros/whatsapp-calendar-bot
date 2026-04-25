@@ -27,7 +27,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import QRCode from 'qrcode';
 
-import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber } from './whatsapp.js';
+import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
 import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview } from './config.js';
@@ -501,6 +501,10 @@ app.get('/status', (req, res) => {
 });
 
 // ── Bot On/Off ─────────────────────────────────────────────────────────────────
+app.get('/whatsapp/groups', (req, res) => {
+  res.json({ groups: getAvailableGroups() });
+});
+
 app.post('/bot/start', (req, res) => {
   startWhatsApp();
   broadcast('status', {});

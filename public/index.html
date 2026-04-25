@@ -767,17 +767,16 @@
   </div>
 
   <div class="card">
-    <div class="card-title">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      קבוצות WhatsApp למעקב
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span style="display:flex;align-items:center;gap:7px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        קבוצות WhatsApp למעקב
+      </span>
+      <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" onclick="fetchWAGroups()">🔄 רענן</button>
     </div>
-    <div class="settings-group">
-      <div class="groups-list" id="groups-list"></div>
-      <div class="add-group-row">
-        <input type="text" id="new-group-input" placeholder="שם קבוצה..." />
-        <button class="btn btn-teal" onclick="addGroup()">הוסף</button>
-      </div>
-    </div>
+    <p style="font-size:.83rem;color:var(--muted);margin-bottom:10px">סמן את הקבוצות שהבוט יעקוב אחריהן להוספת אירועים לגוגל קלנדר</p>
+    <div id="wa-groups-checkboxes" style="display:flex;flex-wrap:wrap;gap:7px"></div>
+    <div id="wa-groups-loading" style="font-size:.85rem;color:var(--muted)">טוען קבוצות...</div>
   </div>
 
   <div class="card">
@@ -1523,29 +1522,44 @@ function emptyCell() { const c = document.createElement('div'); c.className = 'c
 
 // ── Settings helpers ──────────────────────────────────────────────────────────
 let settingsGroups = [];
+let waGroupsList = []; // WhatsApp groups fetched from server
 
-function renderGroupTags() {
-  document.getElementById('groups-list').innerHTML = settingsGroups.map((g, i) =>
-    `<div class="group-tag">${esc(g)}<button onclick="removeGroup(${i})" title="הסר">×</button></div>`
-  ).join('');
+async function fetchWAGroups() {
+  try {
+    const { groups } = await fetch(`${API_BASE}/whatsapp/groups`).then(r => r.json());
+    waGroupsList = groups || [];
+  } catch { waGroupsList = []; }
+  renderWAGroupCheckboxes();
+  // Re-render group map table if it's visible
+  const keys = Object.keys(excelGroupMap);
+  if (keys.length) renderGroupMapTable(keys);
 }
 
-function addGroup() {
-  const input = document.getElementById('new-group-input');
-  const val = input.value.trim();
-  if (!val) return;
-  if (settingsGroups.includes(val)) { toast('הקבוצה כבר קיימת', 'warning'); return; }
-  settingsGroups.push(val); renderGroupTags();
-  toast(`קבוצה נוספה: ${val}`, 'success');
-  input.value = '';
+function renderWAGroupCheckboxes() {
+  const el = document.getElementById('wa-groups-checkboxes');
+  const loading = document.getElementById('wa-groups-loading');
+  if (!el) return;
+  if (!waGroupsList.length) {
+    loading.style.display = '';
+    loading.textContent = 'אין קבוצות זמינות — ודא שהבוט מחובר';
+    el.innerHTML = '';
+    return;
+  }
+  loading.style.display = 'none';
+  el.innerHTML = waGroupsList.map(g => {
+    const checked = settingsGroups.includes(g) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.88rem;white-space:nowrap;background:var(--card)">
+      <input type="checkbox" ${checked} onchange="toggleWAGroup('${esc(g)}', this.checked)" style="accent-color:var(--teal);width:15px;height:15px">
+      ${esc(g)}
+    </label>`;
+  }).join('');
 }
 
-function removeGroup(i) {
-  const name = settingsGroups[i];
-  settingsGroups.splice(i, 1); renderGroupTags();
-  toast(`קבוצה הוסרה: ${name}`, 'warning');
+function toggleWAGroup(name, checked) {
+  if (checked && !settingsGroups.includes(name)) settingsGroups.push(name);
+  else if (!checked) settingsGroups = settingsGroups.filter(g => g !== name);
 }
-document.getElementById('new-group-input').addEventListener('keydown', e => { if (e.key === 'Enter') addGroup(); });
+
 
 function toggleSummarySection(enabled) {
   const body = document.getElementById('summary-body');
@@ -1579,7 +1593,10 @@ let sortCol = null;   // 'group' | 'task' | 'date'
 let sortDir = 1;      // 1 = asc, -1 = desc
 
 async function initExcelTab() {
-  excelGroupMap = await fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({}));
+  [excelGroupMap] = await Promise.all([
+    fetch(`${API_BASE}/excel/group-map`).then(r => r.json()).catch(() => ({})),
+    fetchWAGroups(),   // load WA groups so selects are populated
+  ]);
   renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
   await loadCompletedTasks();
   // Restore parsed table from server if the user refreshed the page
@@ -1705,19 +1722,29 @@ async function updateSavedPlanBadge(weekLabel) {
 
 function renderGroupMapTable(groups) {
   const tbody = document.querySelector('#group-map-table tbody');
-  if (!groups.length) { tbody.innerHTML = '<tr><td style="color:var(--muted)">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>'; return; }
-  tbody.innerHTML = groups.map(g => `
-    <tr>
-      <td style="font-weight:600;min-width:140px">${esc(g)}</td>
-      <td style="color:var(--muted)">→</td>
-      <td><input type="text" data-excel-group="${esc(g)}" value="${esc(excelGroupMap[g] || g)}" placeholder="שם קבוצת WhatsApp" /></td>
-    </tr>`).join('');
+  if (!groups.length) { tbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted)">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>'; return; }
+
+  const selectStyle = 'width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;background:var(--card);color:var(--text)';
+
+  tbody.innerHTML = groups.map(g => {
+    const current = excelGroupMap[g] || '';
+    // Build options: blank + all WA groups; if current value not in list add it too
+    const allOpts = waGroupsList.length ? [...waGroupsList] : (current ? [current] : []);
+    if (current && !allOpts.includes(current)) allOpts.unshift(current);
+    const opts = `<option value="">-- בחר קבוצה --</option>` +
+      allOpts.map(wg => `<option value="${esc(wg)}" ${wg === current ? 'selected' : ''}>${esc(wg)}</option>`).join('');
+    return `<tr>
+      <td style="font-weight:600;min-width:120px">${esc(g)}</td>
+      <td style="color:var(--muted);padding:0 6px">→</td>
+      <td><select data-excel-group="${esc(g)}" style="${selectStyle}">${opts}</select></td>
+    </tr>`;
+  }).join('');
 }
 
 async function saveGroupMap() {
-  const inputs = document.querySelectorAll('#group-map-table input');
+  const selects = document.querySelectorAll('#group-map-table select');
   const map = {};
-  inputs.forEach(inp => { map[inp.dataset.excelGroup] = inp.value.trim(); });
+  selects.forEach(sel => { if (sel.dataset.excelGroup) map[sel.dataset.excelGroup] = sel.value; });
   excelGroupMap = map;
   await fetch(`${API_BASE}/excel/group-map`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(map) });
   const fb = document.getElementById('map-saved-feedback');
@@ -2176,6 +2203,7 @@ async function loadSettings() {
   try {
     const cfg = await fetch(`${API_BASE}/config`).then(r => r.json());
     settingsGroups = [...cfg.groups];
+    fetchWAGroups(); // populate checkboxes with live WA groups
     document.getElementById('sync-hours').value = cfg.syncWindowHours;
     document.getElementById('summary-recipient').value = cfg.summaryRecipient || '';
     const h = String(cfg.summaryHour ?? 7).padStart(2, '0');
@@ -2190,7 +2218,7 @@ async function loadSettings() {
     if (slider) { slider.value = savedSize; document.getElementById('logo-size-val').textContent = savedSize + 'px'; }
     applyLogoSize(savedSize); // apply to preview image immediately
     toggleSummarySection(enabled);
-    renderGroupTags();
+    renderWAGroupCheckboxes();
     document.getElementById('groups-label').textContent = 'קבוצות: ' + cfg.groups.join(' | ');
     // Theme color
     const color = cfg.themeColor || '#3DBDB4';

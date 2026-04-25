@@ -34,6 +34,10 @@ export function getClient() {
   return client;
 }
 
+export function getAvailableGroups() {
+  return Object.keys(groupIdCache).sort();
+}
+
 export function getBotPhoneNumber() {
   try {
     return client?.info?.wid?.user || null;
