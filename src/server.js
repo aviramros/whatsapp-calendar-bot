@@ -114,6 +114,21 @@ function log(msg) {
   broadcast('log', msg);
 }
 
+/**
+ * Send an important bot event to the admin's personal WhatsApp number.
+ * Fire-and-forget — never blocks the main flow.
+ */
+function notifyAdmin(msg) {
+  const { adminPhone } = getConfig();
+  if (!adminPhone) return;
+  // Normalize: strip '+' and non-digits for phone numbers (groups have '@')
+  const phone = adminPhone.trim();
+  const now = new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' });
+  sendWhatsAppMessage(phone, `🤖 [${now}] ${msg}`).catch(err => {
+    console.error('[AdminNotify] Failed:', err.message);
+  });
+}
+
 // ─── Core sync logic ──────────────────────────────────────────────────────────
 
 export async function runSync() {
@@ -171,6 +186,11 @@ export async function runSync() {
 
   log(`[Sync] Done. Created: ${results.created.length}, Skipped: ${results.skipped.length}, Errors: ${results.errors.length}`);
   lastSyncResults = results;
+  if (results.created.length > 0) {
+    notifyAdmin(`📅 סנכרון יומי: נוצרו ${results.created.length} אירועים בלוח השנה${results.errors.length ? ` ⚠️ ${results.errors.length} שגיאות` : ''}`);
+  } else if (results.errors.length > 0) {
+    notifyAdmin(`⚠️ סנכרון יומי: ${results.errors.length} שגיאות, לא נוצרו אירועים חדשים`);
+  }
   broadcast('syncComplete', results);
 
   return results;
@@ -339,6 +359,7 @@ export async function autoDispatchWeeklyPlan() {
   }
 
   log(`[AutoDispatch] ✅ Done — sent: ${sent}, skipped: ${skipped}`);
+  notifyAdmin(`📤 שליחה אוטומטית הושלמה — נשלחו ${sent} משימות${skipped ? `, דולגו ${skipped}` : ''}`);
   broadcast('syncComplete', { created: [], skipped: [], errors: [], autoDispatch: true });
 }
 
@@ -365,6 +386,7 @@ async function sendTomorrowTasksToGroups() {
   const weather  = await fetchWeatherForDate(tomorrow);
   const dayName  = getHebrewDayName(tomorrow);
 
+  let remindersSent = 0, remindersFailed = 0;
   for (const { sendKey, displayName, tasks: groupTasks } of Object.values(byGroup)) {
     let msg = `📋 משימות מחר — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
     groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
@@ -373,7 +395,10 @@ async function sendTomorrowTasksToGroups() {
     }
     const ok = await sendWhatsAppMessage(sendKey, msg.trim());
     log(`[TomorrowGroups] Reminder ${ok ? '✅' : '❌'} → "${displayName}" (${groupTasks.length} tasks)`);
+    if (ok) remindersSent++; else remindersFailed++;
   }
+  const groupCount = Object.keys(byGroup).length;
+  notifyAdmin(`⏰ תזכורות מחר (${dayName}) — ${remindersSent}/${groupCount} קבוצות קיבלו${remindersFailed ? ` ❌ ${remindersFailed} נכשלו` : ' ✅'}`);
 }
 
 // ─── Weekly summary ───────────────────────────────────────────────────────────
@@ -509,6 +534,14 @@ app.get('/whatsapp/groups', (req, res) => {
   res.json({ groups: detail.length ? detail : getAvailableGroups().map(n => ({ name: n, id: n, label: n })) });
 });
 
+// Admin test notification
+app.post('/admin/test-notify', async (req, res) => {
+  const { adminPhone } = getConfig();
+  if (!adminPhone) return res.json({ ok: false, error: 'לא הוגדר מספר מנהל — שמור הגדרות קודם' });
+  const ok = await sendWhatsAppMessage(adminPhone, '🤖 בדיקת חיבור — מערכת הלוגים פעילה ✅');
+  res.json({ ok, error: ok ? null : 'שליחה נכשלה — ודא שהבוט מחובר ומספר הטלפון נכון' });
+});
+
 app.post('/bot/start', (req, res) => {
   startWhatsApp();
   broadcast('status', {});
@@ -570,6 +603,8 @@ app.post('/config', (req, res) => {
     groupRemindersEnabled: req.body.groupRemindersEnabled !== undefined ? Boolean(req.body.groupRemindersEnabled) : (current.groupRemindersEnabled ?? false),
     groupRemindersHour:   req.body.groupRemindersHour   !== undefined ? Number(req.body.groupRemindersHour)   : (current.groupRemindersHour   ?? 7),
     groupRemindersMinute: req.body.groupRemindersMinute !== undefined ? Number(req.body.groupRemindersMinute) : (current.groupRemindersMinute ?? 0),
+    // Admin phone for bot-event notifications
+    adminPhone: req.body.adminPhone !== undefined ? String(req.body.adminPhone).trim() : (current.adminPhone ?? ''),
   };
   saveConfig(updated);
 
@@ -794,7 +829,11 @@ app.post('/excel/resend', async (req, res) => {
 // ─── WhatsApp real-time message handler ──────────────────────────────────────
 
 whatsappEvents.on('log', (msg) => broadcast('log', msg));
-whatsappEvents.on('ready', () => broadcast('status', { whatsappConnected: true }));
+whatsappEvents.on('ready', () => {
+  broadcast('status', { whatsappConnected: true });
+  // Delay so WhatsApp is fully ready before sending
+  setTimeout(() => notifyAdmin('✅ הבוט מחובר ופועל'), 8000);
+});
 whatsappEvents.on('disconnected', () => broadcast('status', { whatsappConnected: false }));
 whatsappEvents.on('qr', () => broadcast('status', { qrAvailable: true }));
 

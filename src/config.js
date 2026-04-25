@@ -27,6 +27,7 @@ const DEFAULTS = {
   logoOrientation: 'landscape',
   latitude: 32.0853,   // default: Tel Aviv area
   longitude: 34.7818,
+  adminPhone: '',      // system-admin phone for bot-event notifications
 };
 
 export function getConfig() {
