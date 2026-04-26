@@ -28,6 +28,7 @@ const DEFAULTS = {
   latitude: 32.0853,   // default: Tel Aviv area
   longitude: 34.7818,
   adminPhone: '',      // system-admin phone for bot-event notifications
+  calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   // Maps each WhatsApp group name to its Google Calendar ID (Service Account approach)
   calendarMap: {
     'השקיה':       'cfbea46a5e114990d973b6c11fb2a40b2fc38c4fc6fcdaef40ca80fac57f86da@group.calendar.google.com',
