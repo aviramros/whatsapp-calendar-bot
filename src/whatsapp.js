@@ -260,33 +260,52 @@ export async function fetchRecentMessages(hours) {
  * @param {string} recipient - group chat ID (e.g. "120363...@g.us"), phone number, or group name
  * @param {string} text
  */
-export async function sendWhatsAppMessage(recipient, text) {
+/**
+ * Sends a WhatsApp message to a phone number, group name, or direct chat ID.
+ * @param {string} recipient - group chat ID (e.g. "120363...@g.us"), phone number, or group name
+ * @param {string} text
+ * @param {{ pin?: boolean, pinDuration?: number }} options
+ *   pin: auto-pin the message (requires bot to be group admin). Default false.
+ *   pinDuration: seconds to pin for — 86400 (24h), 604800 (7d), 2592000 (30d). Default 86400.
+ */
+export async function sendWhatsAppMessage(recipient, text, options = {}) {
+  const { pin = false, pinDuration = 86400 } = options;
   if (!isReady || !client) {
     log('Cannot send message — not connected');
     return false;
   }
   try {
+    let msg;
     // If recipient is already a raw chat ID (contains '@'), use it directly — most reliable
     if (recipient.includes('@')) {
-      await client.sendMessage(recipient.trim(), text);
-      return true;
+      msg = await client.sendMessage(recipient.trim(), text);
+    } else {
+      // Try as group name using cache
+      const cachedId = groupIdCache[recipient.trim()];
+      if (cachedId) {
+        msg = await client.sendMessage(cachedId, text);
+      } else {
+        // Otherwise treat as phone number
+        const bare = recipient.replace(/^\+/, '').replace(/\D/g, '');
+        let chatId;
+        try {
+          const numberId = await client.getNumberId(bare);
+          chatId = numberId ? numberId._serialized : `${bare}@c.us`;
+        } catch (_) {
+          chatId = `${bare}@c.us`;
+        }
+        msg = await client.sendMessage(chatId, text);
+      }
     }
-    // Try as group name using cache
-    const cachedId = groupIdCache[recipient.trim()];
-    if (cachedId) {
-      await client.sendMessage(cachedId, text);
-      return true;
+    // Pin message if requested (bot must be group admin)
+    if (pin && msg) {
+      try {
+        await msg.pin(pinDuration);
+        log(`Pinned message in ${recipient} (${pinDuration / 3600}h)`);
+      } catch (e) {
+        log(`Pin failed for ${recipient}: ${e.message}`);
+      }
     }
-    // Otherwise treat as phone number — try getNumberId first, fall back to @c.us direct
-    const bare = recipient.replace(/^\+/, '').replace(/\D/g, '');
-    let chatId;
-    try {
-      const numberId = await client.getNumberId(bare);
-      chatId = numberId ? numberId._serialized : `${bare}@c.us`;
-    } catch (_) {
-      chatId = `${bare}@c.us`;
-    }
-    await client.sendMessage(chatId, text);
     return true;
   } catch (err) {
     log('Error sending message: ' + err.message);

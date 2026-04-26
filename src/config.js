@@ -30,6 +30,7 @@ const DEFAULTS = {
   adminPhone: '',      // system-admin phone for bot-event notifications
   calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   cardLayouts: {},     // { tabName: { order: [...], hidden: [...] } } — per-tab card layout
+  pinMessages: false,  // auto-pin group reminder messages (bot must be group admin)
   // Maps each WhatsApp group name to its Google Calendar ID (Service Account approach)
   calendarMap: {
     'השקיה':       'cfbea46a5e114990d973b6c11fb2a40b2fc38c4fc6fcdaef40ca80fac57f86da@group.calendar.google.com',

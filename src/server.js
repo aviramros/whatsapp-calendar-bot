@@ -395,8 +395,8 @@ async function sendTomorrowTasksToGroups() {
     if (weather) {
       msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
     }
-    const ok = await sendWhatsAppMessage(sendKey, msg.trim());
-    log(`[TomorrowGroups] Reminder ${ok ? '✅' : '❌'} → "${displayName}" (${groupTasks.length} tasks)`);
+    const ok = await sendWhatsAppMessage(sendKey, msg.trim(), { pin: config.pinMessages === true });
+    log(`[TomorrowGroups] Reminder ${ok ? '✅' : '❌'}${config.pinMessages ? ' 📌' : ''} → "${displayName}" (${groupTasks.length} tasks)`);
     if (ok) remindersSent++; else remindersFailed++;
   }
   const groupCount = Object.keys(byGroup).length;
@@ -570,6 +570,7 @@ app.post('/config', (req, res) => {
     groupRemindersEnabled: req.body.groupRemindersEnabled !== undefined ? Boolean(req.body.groupRemindersEnabled) : (current.groupRemindersEnabled ?? false),
     groupRemindersHour:   req.body.groupRemindersHour   !== undefined ? Number(req.body.groupRemindersHour)   : (current.groupRemindersHour   ?? 7),
     groupRemindersMinute: req.body.groupRemindersMinute !== undefined ? Number(req.body.groupRemindersMinute) : (current.groupRemindersMinute ?? 0),
+    pinMessages: req.body.pinMessages !== undefined ? Boolean(req.body.pinMessages) : (current.pinMessages ?? false),
     // Admin phone for bot-event notifications
     adminPhone: req.body.adminPhone !== undefined ? String(req.body.adminPhone).trim() : (current.adminPhone ?? ''),
   };

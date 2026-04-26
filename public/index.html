@@ -987,9 +987,19 @@
         </label>
       </div>
       <div id="group-reminders-settings" style="display:none">
-        <div class="settings-group" style="margin-bottom:0;max-width:180px">
+        <div class="settings-group" style="margin-bottom:12px;max-width:180px">
           <label>שעת שליחה</label>
           <input type="time" id="group-reminders-time" value="07:00" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)" />
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <label class="toggle-switch" style="flex-shrink:0">
+            <input type="checkbox" id="pin-messages" onchange="markSettingsDirty()">
+            <span class="toggle-slider"></span>
+          </label>
+          <div>
+            <div style="font-size:.86rem;font-weight:600">📌 נעץ הודעות אוטומטית</div>
+            <div style="font-size:.78rem;color:var(--muted);margin-top:2px">הבוט ינעץ כל הודעת תזכורת — דורש שהבוט יהיה מנהל בקבוצה</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2512,6 +2522,7 @@ async function loadSettings() {
     const grh = String(cfg.groupRemindersHour ?? 7).padStart(2,'0');
     const grm = String(cfg.groupRemindersMinute ?? 0).padStart(2,'0');
     document.getElementById('group-reminders-time').value = `${grh}:${grm}`;
+    document.getElementById('pin-messages').checked = cfg.pinMessages ?? false;
   } catch {}
 }
 
@@ -2533,6 +2544,7 @@ async function saveSettings() {
     groupRemindersEnabled: document.getElementById('group-reminders-enabled').checked,
     groupRemindersHour:   parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[0], 10),
     groupRemindersMinute: parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[1], 10),
+    pinMessages: document.getElementById('pin-messages').checked,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
