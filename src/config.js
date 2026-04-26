@@ -31,10 +31,12 @@ const DEFAULTS = {
   // Maps each WhatsApp group name to its Google Calendar ID (Service Account approach)
   calendarMap: {
     'השקיה':       'cfbea46a5e114990d973b6c11fb2a40b2fc38c4fc6fcdaef40ca80fac57f86da@group.calendar.google.com',
+    'השקיה🚰':     'cfbea46a5e114990d973b6c11fb2a40b2fc38c4fc6fcdaef40ca80fac57f86da@group.calendar.google.com',
     'עבודות בית':  '3095c786fcf9e791929c929f3a0104372771783d76ff755fde7c34ac28717b73@group.calendar.google.com',
     'עבודות':      '3095c786fcf9e791929c929f3a0104372771783d76ff755fde7c34ac28717b73@group.calendar.google.com',
     'ריסוסים':     '8fb2d1840a975a1dcf5061c818fe12e6a6fc38c931a929fdf247a31266e9caec@group.calendar.google.com',
     'דישונים':     '8fb2d1840a975a1dcf5061c818fe12e6a6fc38c931a929fdf247a31266e9caec@group.calendar.google.com',
+    'בוזיה!🌾':    '3095c786fcf9e791929c929f3a0104372771783d76ff755fde7c34ac28717b73@group.calendar.google.com',
   },
 };
 
