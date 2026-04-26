@@ -5,17 +5,21 @@ import { writeFileSync, readFileSync, mkdirSync, existsSync, statSync } from 'fs
 {
   const credDir = new URL('../credentials', import.meta.url).pathname;
   mkdirSync(credDir, { recursive: true });
+  // Service Account JSON (primary — replaces OAuth2)
+  if (process.env.GOOGLE_SA_BASE64) {
+    const p = process.env.GOOGLE_SA_PATH || './credentials/google-service-account.json';
+    if (!existsSync(p)) {
+      writeFileSync(p, Buffer.from(process.env.GOOGLE_SA_BASE64, 'base64').toString('utf8'));
+      console.log('[Server] Google Service Account credentials written from env var');
+    }
+  }
+  // Legacy OAuth2 bootstrap (kept for backward-compat, not used when SA is configured)
   if (process.env.GOOGLE_OAUTH_BASE64) {
     const p = process.env.GOOGLE_CREDENTIALS_PATH || './credentials/google-oauth.json';
     if (!existsSync(p)) {
       writeFileSync(p, Buffer.from(process.env.GOOGLE_OAUTH_BASE64, 'base64').toString('utf8'));
       console.log('[Server] Google OAuth credentials written from env var');
     }
-  }
-  if (process.env.GOOGLE_TOKEN_BASE64) {
-    const p = process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json';
-    writeFileSync(p, Buffer.from(process.env.GOOGLE_TOKEN_BASE64, 'base64').toString('utf8'));
-    console.log('[Server] Google token written from env var →', p);
   }
 }
 
@@ -41,8 +45,6 @@ import {
   createAllDayEvent,
   fetchUpcomingEvents,
   fetchWeekEvents,
-  startGoogleAuthFlow,
-  createOAuthClient,
 } from './calendar.js';
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
          scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo,
@@ -138,10 +140,9 @@ export async function runSync() {
 
   // Always send tomorrow's tasks reminder — independent of Google auth
   await sendTomorrowTasks();
-  await checkAndWarnTokenExpiry();
 
   if (!isGoogleAuthenticated()) {
-    const err = 'Google Calendar not authenticated. Run: npm run setup-auth';
+    const err = 'Google Calendar not configured. Set GOOGLE_SA_BASE64 env var.';
     log('[Sync] ERROR: ' + err);
     return { created: [], skipped: [], errors: [err] };
   }
@@ -172,6 +173,7 @@ export async function runSync() {
       }
       try {
         const calId = await getOrCreateCalendar(auth, groupName, calendarIds);
+        if (!calId) { results.skipped.push(parsed.fingerprint); continue; }
         await createAllDayEvent(auth, calId, parsed.title, parsed.date);
         state.add(parsed.fingerprint);
         totalEventsCreated++;
@@ -469,47 +471,12 @@ app.get('/qr', async (req, res) => {
   }
 });
 
-// ─── Google OAuth endpoints ───────────────────────────────────────────────────
-// Helper: get correct protocol even behind Railway's reverse proxy
-function getBaseUrl(req) {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol;
-  return proto + '://' + req.get('host');
-}
-
-app.get('/auth/google/start', (req, res) => {
-  try {
-    const redirectUri = getBaseUrl(req) + '/auth/google/callback';
-    const oAuth2Client = createOAuthClient(redirectUri);
-    const authUrl = oAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent',
-    });
-    res.json({ authUrl, redirectUri });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
-
-app.get('/auth/google/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.send('<h2>שגיאה — לא התקבל קוד מ-Google</h2>');
-  try {
-    const oAuth2Client = createOAuthClient(getBaseUrl(req) + '/auth/google/callback');
-    const { tokens } = await oAuth2Client.getToken(code);
-    // Stamp when the refresh token was issued so we can warn before 7-day expiry (Testing mode)
-    const tokenWithMeta = { ...tokens, authorized_at: Date.now() };
-    writeFileSync(process.env.GOOGLE_TOKEN_PATH || './credentials/google-token.json', JSON.stringify(tokenWithMeta, null, 2));
-    broadcast('google-auth', { authenticated: true });
-    res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:60px;direction:rtl">
-      <h2>✅ Google Calendar מחובר בהצלחה!</h2>
-      <p>אפשר לסגור את הכרטיסייה הזו ולחזור לבוט.</p>
-      <script>setTimeout(()=>window.close(),2000)</script>
-    </body></html>`);
-  } catch (err) {
-    res.send('<h2>שגיאה: ' + err.message + '</h2><p>ייתכן שצריך להוסיף את כתובת ה-callback לרשימת ה-redirect URIs ב-Google Cloud Console</p>');
-  }
-});
+// ─── Google Service Account — no OAuth endpoints needed ──────────────────────
+// Authentication is handled via Service Account JSON set at deploy time.
+// These stubs keep any old UI calls from crashing.
+app.get('/auth/google/start',    (req, res) => res.json({ error: 'OAuth not used — Service Account configured' }));
+app.get('/auth/google/callback', (req, res) => res.redirect('/'));
+app.get('/auth/google/redirect', (req, res) => res.redirect('/'));
 
 app.get('/status', (req, res) => {
   const wa = getStatus();
@@ -779,6 +746,7 @@ app.post('/excel/dispatch', async (req, res) => {
 
       // Create calendar event (skips if already exists in Google Calendar)
       const calId = await getOrCreateCalendar(auth, task.whatsappGroup, calendarIds);
+      if (!calId) { results.skipped.push(fp); continue; }
       const created = await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
       state.add(fp);
       if (created) {
@@ -816,7 +784,7 @@ app.post('/excel/resend', async (req, res) => {
     const msgText = `${task.taskText} ${task.dateLabel}`;
     const sent = await sendWhatsAppMessage(task.whatsappGroup, msgText);
     const calId = await getOrCreateCalendar(auth, task.whatsappGroup, calendarIds);
-    await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
+    if (calId) await createAllDayEvent(auth, calId, task.taskText, task.dateISO);
     state.add(task.fingerprint);
     log(`[Excel] Resent: "${task.taskText}" on ${task.dateISO} → ${task.whatsappGroup} | WhatsApp: ${sent ? '✅' : '❌'}`);
     res.json({ ok: true, whatsappSent: sent });
@@ -903,6 +871,7 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
     for (const parsed of events) {
       if (state.has(parsed.fingerprint)) continue;
       const calId = await getOrCreateCalendar(auth, groupName, calendarIds);
+      if (!calId) continue;
       await createAllDayEvent(auth, calId, parsed.title, parsed.date);
       state.add(parsed.fingerprint);
       totalEventsCreated++;
@@ -914,21 +883,6 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
   }
 });
 
-// ─── Google OAuth direct redirect (for WhatsApp links) ───────────────────────
-app.get('/auth/google/redirect', (req, res) => {
-  try {
-    const redirectUri = getBaseUrl(req) + '/auth/google/callback';
-    const oAuth2Client = createOAuthClient(redirectUri);
-    const authUrl = oAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent',
-    });
-    res.redirect(authUrl);
-  } catch (err) {
-    res.status(500).send('שגיאה: ' + err.message);
-  }
-});
 
 // ─── Weather proxy (Open-Meteo, no API key needed) ────────────────────────────
 app.get('/weather', async (req, res) => {

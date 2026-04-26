@@ -3,6 +3,7 @@ node_modules/
 .wwebjs_cache/
 credentials/google-token.json
 credentials/google-oauth.json
+credentials/google-service-account.json
 .env
 data/processed-events.json
 data/config.json
