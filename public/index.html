@@ -111,8 +111,11 @@
     }
 
     /* ── Pages ── */
-    .page { display: none; padding: 24px; max-width: 1100px; }
-    .page.active { display: block; }
+    .page { display: none; padding: 24px; }
+    .page.active { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; align-content: start; }
+
+    /* Full-width card inside auto-fill grid */
+    .card-wide { grid-column: 1 / -1; }
 
     /* ── Cards ── */
     .card {
@@ -120,7 +123,6 @@
       border-radius: var(--radius);
       padding: 18px 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px var(--border);
-      margin-bottom: 14px;
       border: none;
     }
     .card-title {
@@ -332,6 +334,25 @@
     .upload-area:hover, .upload-area.dragover { border-color: var(--teal); background: var(--teal-light); color: var(--teal-dark); }
     .upload-area svg { opacity: .5; flex-shrink: 0; }
 
+    /* ── Sticky settings save bar ── */
+    #settings-save-bar {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      left: var(--sidebar-w);
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 12px 24px;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: left .25s ease;
+    }
+    body.sidebar-collapsed #settings-save-bar { left: 0; }
+    #tab-settings { padding-bottom: 72px; }
+    body.dark #settings-save-bar { background: var(--card); }
+
     /* ── Google connect button ── */
     #gc-connect-btn {
       display: none; margin-right: auto;
@@ -528,11 +549,11 @@
       #sidebar        { display: none !important; }
       #sidebar-toggle { display: none !important; }
       #bottom-nav     { display: flex; }
+      #settings-save-bar { left: 0; }
 
       body    { padding-bottom: 62px; }
-      .page   { padding: 14px 12px 78px; }
+      .page   { padding: 14px 12px 78px; grid-template-columns: 1fr; }
       .card   { padding: 14px 14px; }
-      .grid2  { grid-template-columns: 1fr; }
 
       #log-panel { height: 180px; }
 
@@ -619,12 +640,7 @@
     <img src="/logo-default.svg" id="sidebar-logo-img" style="max-height:36px;max-width:140px;object-fit:contain" />
   </div>
 
-  <nav style="padding: 8px 0; flex:1">
-    <div class="nav-item active" onclick="showTab('dashboard')" id="nav-dashboard">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      לוח בקרה
-      <svg id="dashboard-lock-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:auto;opacity:.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-    </div>
+  <nav style="padding: 8px 0; flex:1; display:flex; flex-direction:column">
     <div class="nav-item" onclick="showTab('excel')" id="nav-excel">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       תכנית שבועית
@@ -637,22 +653,15 @@
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       הגדרות
     </div>
+    <div style="flex:1"></div>
+    <div class="nav-item active" onclick="showTab('dashboard')" id="nav-dashboard">
+      איזור מנהל
+      <svg id="dashboard-lock-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:auto;opacity:.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
   </nav>
 
-  <div style="padding: 10px 14px; font-size:.75rem; color:#d1d5db; border-top:1px solid var(--border); white-space:nowrap; display:flex; align-items:center; justify-content:space-between">
+  <div style="padding: 10px 14px; font-size:.75rem; color:#d1d5db; border-top:1px solid var(--border); white-space:nowrap">
     v1.0 · gadash
-    <div style="display:flex;gap:2px">
-      <button id="notif-btn" onclick="handleNotifClick()" title="התראות דפדפן"
-        style="background:none;border:none;cursor:pointer;padding:5px;line-height:1;border-radius:4px;opacity:.5;transition:opacity .15s;color:var(--muted);display:flex;align-items:center"
-        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.5'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      </button>
-      <button id="dark-mode-btn" onclick="toggleDarkMode()" title="מצב כהה/בהיר"
-        style="background:none;border:none;cursor:pointer;padding:5px;line-height:1;border-radius:4px;opacity:.5;transition:opacity .15s;color:var(--muted);display:flex;align-items:center"
-        onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.5'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
-    </div>
   </div>
 </div>
 
@@ -664,7 +673,6 @@
 
 <!-- ══════════════════ DASHBOARD ══════════════════ -->
 <div id="tab-dashboard" class="page active">
-  <div class="grid2">
 
     <div class="card">
       <div class="card-title">
@@ -704,10 +712,8 @@
       <div id="result-box"></div>
     </div>
 
-  </div>
-
   <!-- ── Admin notifications ── -->
-  <div class="card">
+  <div class="card card-wide">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       לוגים למנהל מערכת
@@ -720,10 +726,10 @@
       <button class="btn btn-gray" onclick="sendAdminTestNotification(this)" style="white-space:nowrap">שלח בדיקה</button>
       <span id="admin-phone-feedback" style="display:none;font-size:.82rem;font-weight:600"></span>
     </div>
-    <p style="font-size:.78rem;color:var(--muted);margin-top:8px">אירועים שיישלחו: חיבור בוט ✅ · שליחה אוטומטית 📤 · תזכורות יומיות ⏰ · סנכרון לוח שנה 📅</p>
+    <p style="font-size:.78rem;color:var(--muted);margin-top:8px">אירועים שיישלחו: חיבור בוט · שליחה אוטומטית · תזכורות יומיות · סנכרון לוח שנה</p>
   </div>
 
-  <div class="card">
+  <div class="card card-wide">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       לוג פעילות (בזמן אמת)
@@ -734,7 +740,7 @@
 
 <!-- ══════════════════ CALENDAR ══════════════════ -->
 <div id="tab-calendar" class="page">
-  <div class="card">
+  <div class="card card-wide">
     <div class="cal-header">
       <div class="cal-nav">
         <button class="btn btn-gray" onclick="calNav(-1)">‹</button>
@@ -777,7 +783,7 @@
     <div style="display:flex;flex-direction:column;gap:14px">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-size:.9rem;font-weight:600;color:var(--text)">🌙 מצב כהה</div>
+          <div style="font-size:.9rem;font-weight:600;color:var(--text)">מצב כהה</div>
           <div style="font-size:.8rem;color:var(--muted);margin-top:2px">מתאים לשימוש בלילה</div>
         </div>
         <label class="toggle-switch">
@@ -787,21 +793,27 @@
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-size:.9rem;font-weight:600;color:var(--text)">🔔 התראות דפדפן</div>
+          <div style="font-size:.9rem;font-weight:600;color:var(--text)">התראות דפדפן</div>
           <div style="font-size:.8rem;color:var(--muted);margin-top:2px" id="notif-status-text">קבל התראה כשנוצרים אירועים חדשים</div>
         </div>
-        <button id="notif-settings-btn" onclick="handleNotifClick()" class="btn btn-gray" style="font-size:.83rem;padding:6px 14px">הפעל</button>
+        <label class="toggle-switch">
+          <input type="checkbox" id="notif-toggle" onchange="handleNotifClick()">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card card-wide">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
       <span style="display:flex;align-items:center;gap:7px">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         קבוצות WhatsApp למעקב
       </span>
-      <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" onclick="fetchWAGroups()">רענן</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" id="wa-groups-toggle-btn" onclick="toggleGroupsView()">הצג הכל</button>
+        <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" onclick="fetchWAGroups()">רענן</button>
+      </div>
     </div>
     <p style="font-size:.83rem;color:var(--muted);margin-bottom:10px">סמן את הקבוצות שהבוט יעקוב אחריהן להוספת אירועים לגוגל קלנדר</p>
     <div id="wa-groups-checkboxes" style="display:flex;flex-wrap:wrap;gap:7px"></div>
@@ -819,7 +831,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card card-wide">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0;flex:1">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -867,7 +879,7 @@
   </div>
 
   <!-- ── Auto dispatch & group reminders ── -->
-  <div class="card">
+  <div class="card card-wide">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       תזמון שליחה אוטומטית
@@ -947,7 +959,7 @@
   </div>
 
   <!-- ── Logo ── -->
-  <div class="card">
+  <div class="card card-wide">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       לוגו המערכת
@@ -998,15 +1010,20 @@
     </div>
   </div>
 
-  <button class="btn btn-teal" style="width:100%;padding:13px;font-size:1rem;border-radius:10px" onclick="saveSettings()">שמור הגדרות</button>
-  <div class="save-feedback" id="save-feedback">✓ הגדרות נשמרו בהצלחה</div>
+
+</div>
+
+<!-- ── Settings sticky save bar ── -->
+<div id="settings-save-bar" style="display:none">
+  <button class="btn btn-teal" style="padding:10px 28px;font-size:.95rem" onclick="saveSettings()">שמור הגדרות</button>
+  <div class="save-feedback" id="save-feedback" style="margin:0">✓ הגדרות נשמרו בהצלחה</div>
 </div>
 
 <!-- ══════════════════ EXCEL ══════════════════ -->
 <div id="tab-excel" class="page">
 
   <!-- Weather card -->
-  <div class="card" id="weather-card" style="display:none">
+  <div class="card card-wide" id="weather-card" style="display:none">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
       תחזית מזג אוויר
@@ -1016,7 +1033,7 @@
     <div id="weather-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
   </div>
 
-  <div id="saved-plan-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:9px 14px;font-size:.87rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+  <div id="saved-plan-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:9px 14px;font-size:.87rem;font-weight:600;display:flex;align-items:center;gap:8px;grid-column:1/-1">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     <span id="saved-plan-badge-text"></span>
     <span style="margin-right:auto;font-size:.78rem;font-weight:400;opacity:.7">תזכורת יומית פעילה</span>
@@ -1039,7 +1056,7 @@
     </div>
   </div>
 
-  <div class="card" id="group-map-card">
+  <div class="card card-wide" id="group-map-card">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       מיפוי קבוצות
@@ -1052,7 +1069,7 @@
     </div>
   </div>
 
-  <div class="card" id="excel-preview-card" style="display:none">
+  <div class="card card-wide" id="excel-preview-card" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1063,7 +1080,7 @@
         <span id="preview-skipped" class="chip chip-skip"></span>
         <span id="preview-nomap" class="chip chip-nomap"></span>
         <button onclick="resetWeeklyPlan()" title="אפס תכנית שבועית" style="background:none;border:1px solid var(--border);border-radius:7px;padding:4px 9px;cursor:pointer;font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:4px" onmouseover="this.style.borderColor='#ef4444';this.style.color='#ef4444'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
-          🗑 אפס
+          אפס
         </button>
       </div>
     </div>
@@ -1108,8 +1125,8 @@
     </div>
   </div>
 
-  <div class="excel-results" id="excel-results"></div>
-  <div id="auto-dispatch-badge" style="display:none;margin-top:10px;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:8px 14px;font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:7px">
+  <div class="excel-results" id="excel-results" style="grid-column:1/-1"></div>
+  <div id="auto-dispatch-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:8px 14px;font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:7px;grid-column:1/-1">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     <span id="auto-dispatch-badge-text"></span>
   </div>
@@ -1164,6 +1181,9 @@ function toggleSidebar() {
   sb.classList.toggle('collapsed', sidebarCollapsed);
   btn.textContent = sidebarCollapsed ? '›' : '‹';
   btn.style.right = sidebarCollapsed ? '-13px' : 'calc(var(--sidebar-w) - 13px)';
+  // Adjust sticky save bar
+  const saveBar = document.getElementById('settings-save-bar');
+  if (saveBar) saveBar.style.left = sidebarCollapsed ? '0' : 'var(--sidebar-w)';
 }
 
 // ── Tech password lock ────────────────────────────────────────────────────────
@@ -1215,6 +1235,9 @@ function _doShowTab(name) {
     document.getElementById('tab-' + t)?.classList.toggle('active', t === name);
     document.getElementById('bnav-' + t)?.classList.toggle('active', t === name);
   });
+  // Show/hide sticky settings save bar
+  const saveBar = document.getElementById('settings-save-bar');
+  if (saveBar) saveBar.style.display = name === 'settings' ? 'flex' : 'none';
   if (name === 'calendar') loadCalendar();
   if (name === 'settings') loadSettings();
   if (name === 'excel') initExcelTab();
@@ -1553,6 +1576,7 @@ function emptyCell() { const c = document.createElement('div'); c.className = 'c
 // ── Settings helpers ──────────────────────────────────────────────────────────
 let settingsGroups = [];
 let waGroupsList = []; // WhatsApp groups fetched from server
+let showAllGroups = false; // groups show/hide state
 
 async function fetchWAGroups() {
   try {
@@ -1566,6 +1590,13 @@ async function fetchWAGroups() {
   if (keys.length) renderGroupMapTable(keys);
 }
 
+function toggleGroupsView() {
+  showAllGroups = !showAllGroups;
+  const btn = document.getElementById('wa-groups-toggle-btn');
+  if (btn) btn.textContent = showAllGroups ? 'הסתר' : 'הצג הכל';
+  renderWAGroupCheckboxes();
+}
+
 function renderWAGroupCheckboxes() {
   const el = document.getElementById('wa-groups-checkboxes');
   const loading = document.getElementById('wa-groups-loading');
@@ -1577,7 +1608,16 @@ function renderWAGroupCheckboxes() {
     return;
   }
   loading.style.display = 'none';
-  el.innerHTML = waGroupsList.map(g => {
+  // Filter: if not showAllGroups, show only selected groups
+  const listToShow = showAllGroups
+    ? waGroupsList
+    : waGroupsList.filter(g => settingsGroups.includes(g.name));
+  // If nothing selected and not showAll, show a hint
+  if (!showAllGroups && listToShow.length === 0) {
+    el.innerHTML = `<span style="font-size:.84rem;color:var(--muted)">אין קבוצות נבחרות — לחץ "הצג הכל" לבחירה</span>`;
+    return;
+  }
+  el.innerHTML = listToShow.map(g => {
     const checked = settingsGroups.includes(g.name) ? 'checked' : '';
     return `<label style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.88rem;white-space:nowrap;background:var(--card)">
       <input type="checkbox" ${checked} onchange="toggleWAGroup('${esc(g.name)}', this.checked)" style="accent-color:var(--teal);width:15px;height:15px">
@@ -2524,9 +2564,6 @@ async function toggleTaskDone(fingerprint, done, rowIdx) {
 function applyDark(on) {
   document.body.classList.toggle('dark', on);
   localStorage.setItem('darkMode', on ? '1' : '0');
-  // Sync sidebar button
-  const btn = document.getElementById('dark-mode-btn');
-  if (btn) btn.textContent = on ? '☀️' : '🌙';
   // Sync settings toggle
   const tog = document.getElementById('dark-mode-toggle');
   if (tog) tog.checked = on;
@@ -2537,27 +2574,31 @@ function toggleDarkMode() {
 
 // ── Push notifications ────────────────────────────────────────────────────────
 function updateNotifUI() {
-  const btn  = document.getElementById('notif-btn');
-  const sbtn = document.getElementById('notif-settings-btn');
+  const tog  = document.getElementById('notif-toggle');
   const txt  = document.getElementById('notif-status-text');
   const supported = 'Notification' in window;
   if (!supported) {
-    if (sbtn) sbtn.textContent = 'לא נתמך';
-    if (sbtn) sbtn.disabled = true;
+    if (tog) { tog.checked = false; tog.disabled = true; }
+    if (txt) txt.textContent = 'לא נתמך בדפדפן זה';
     return;
   }
   const perm = Notification.permission;
-  if (btn)  btn.textContent  = perm === 'granted' ? '🔔' : '🔕';
-  if (sbtn) { sbtn.textContent = perm === 'granted' ? '✅ פעיל' : perm === 'denied' ? '🚫 חסום' : 'הפעל'; sbtn.disabled = perm === 'denied'; }
-  if (txt)  txt.textContent  = perm === 'granted' ? '✅ התראות פעילות' : perm === 'denied' ? 'חסום בהגדרות הדפדפן' : 'קבל התראה כשנוצרים אירועים חדשים';
+  if (tog) { tog.checked = perm === 'granted'; tog.disabled = perm === 'denied'; }
+  if (txt) txt.textContent = perm === 'granted' ? 'התראות פעילות' : perm === 'denied' ? 'חסום בהגדרות הדפדפן' : 'קבל התראה כשנוצרים אירועים חדשים';
 }
 async function handleNotifClick() {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') return;
-  if (Notification.permission === 'denied') { toast('התראות חסומות — שחרר בהגדרות הדפדפן', 'warning'); return; }
+  if (Notification.permission === 'denied') {
+    // Reset toggle to off since it's blocked
+    const tog = document.getElementById('notif-toggle');
+    if (tog) tog.checked = false;
+    toast('התראות חסומות — שחרר בהגדרות הדפדפן', 'warning');
+    return;
+  }
   await Notification.requestPermission();
   updateNotifUI();
-  if (Notification.permission === 'granted') toast('התראות דפדפן הופעלו ✅', 'success');
+  if (Notification.permission === 'granted') toast('התראות דפדפן הופעלו', 'success');
 }
 function showPushNotification(title, body) {
   if (Notification.permission !== 'granted') return;
