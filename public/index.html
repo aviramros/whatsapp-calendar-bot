@@ -126,8 +126,16 @@
       padding: 18px 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px var(--border);
       border: none;
-      flex: 1 1 calc(33.33% - 10px);
+      flex: 1 1 100%;   /* ≤1440px: 1 column */
       min-width: 0;
+    }
+    /* 1440–1920px: 2 columns */
+    @media (min-width: 1441px) and (max-width: 1919px) {
+      .card { flex: 1 1 calc(50% - 7px); }
+    }
+    /* ≥1920px: 3 columns */
+    @media (min-width: 1920px) {
+      .card { flex: 1 1 calc(33.33% - 10px); }
     }
     .card-title {
       font-size: .85rem;
