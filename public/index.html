@@ -342,8 +342,8 @@
     #settings-save-bar {
       position: fixed;
       bottom: 0;
-      right: 0;
-      left: var(--sidebar-w);
+      left: 0;
+      right: var(--sidebar-w);
       background: var(--card);
       border-top: 1px solid var(--border);
       padding: 12px 24px;
@@ -351,9 +351,9 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      transition: left .25s ease;
+      transition: right .25s ease;
     }
-    body.sidebar-collapsed #settings-save-bar { left: 0; }
+    body.sidebar-collapsed #settings-save-bar { right: 0; }
     #tab-settings { padding-bottom: 72px; }
     body.dark #settings-save-bar { background: var(--card); }
 
@@ -553,7 +553,7 @@
       #sidebar        { display: none !important; }
       #sidebar-toggle { display: none !important; }
       #bottom-nav     { display: flex; }
-      #settings-save-bar { left: 0; }
+      #settings-save-bar { right: 0; left: 0; }
 
       body    { padding-bottom: 62px; }
       .page   { padding: 14px 12px 78px; }
@@ -1187,7 +1187,7 @@ function toggleSidebar() {
   btn.style.right = sidebarCollapsed ? '-13px' : 'calc(var(--sidebar-w) - 13px)';
   // Adjust sticky save bar
   const saveBar = document.getElementById('settings-save-bar');
-  if (saveBar) saveBar.style.left = sidebarCollapsed ? '0' : 'var(--sidebar-w)';
+  if (saveBar) saveBar.style.right = sidebarCollapsed ? '0' : 'var(--sidebar-w)';
 }
 
 // ── Tech password lock ────────────────────────────────────────────────────────
