@@ -612,6 +612,23 @@
       #toast-container { left: 12px; right: 12px; bottom: 74px; }
       .toast { min-width: unset; max-width: unset; width: 100%; }
     }
+    /* ── Layout editing ── */
+    .layout-bar { display:flex; align-items:center; gap:10px; padding:6px 0; min-height:0; background:transparent; border:none; box-shadow:none; }
+    [data-card-id] { transition: opacity .15s, box-shadow .15s; }
+    [data-card-id].dragging { opacity:.45; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+    [data-card-id].drag-over { box-shadow:0 0 0 2px var(--teal) !important; }
+    [data-card-id][data-hidden="true"] { display:none !important; }
+    .card-drag-handle { display:none; position:absolute; top:10px; left:10px; cursor:grab; color:#9ca3af; font-size:1.1rem; padding:2px 4px; border-radius:4px; z-index:2; }
+    .card-drag-handle:hover { color:var(--teal); background:var(--teal-light); }
+    .card-hide-btn { display:none; position:absolute; top:8px; right:10px; cursor:pointer; background:none; border:none; color:#9ca3af; font-size:.88rem; padding:2px 5px; border-radius:4px; z-index:2; }
+    .card-hide-btn:hover { background:#fee2e2; color:#dc2626; }
+    body.layout-editing [data-card-id] { position:relative; }
+    body.layout-editing .card-drag-handle,
+    body.layout-editing .card-hide-btn { display:block; }
+    body.layout-editing .layout-edit-hint { display:inline !important; }
+    body.layout-editing .layout-hidden-restore { display:flex !important; }
+    .restore-chip { font-size:.76rem; padding:3px 10px; border-radius:14px; background:#f3f4f6; border:1px solid var(--border); cursor:pointer; color:var(--muted); }
+    .restore-chip:hover { background:var(--teal-light); color:var(--teal); }
   </style>
 </head>
 <body>
@@ -698,7 +715,13 @@
 <!-- ══════════════════ DASHBOARD ══════════════════ -->
 <div id="tab-dashboard" class="page active">
 
-    <div class="card">
+  <div class="layout-bar card-wide" data-layout-tab="dashboard">
+    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('dashboard')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
+    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
+    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+  </div>
+
+    <div class="card" data-card-id="status">
       <div class="card-title">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         סטטוס חיבורים
@@ -723,7 +746,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" data-card-id="sync">
       <div class="card-title">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-5.96"/></svg>
         סנכרון ידני
@@ -734,7 +757,7 @@
     </div>
 
   <!-- ── Admin notifications ── -->
-  <div class="card card-wide">
+  <div class="card card-wide" data-card-id="admin-notify">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       לוגים למנהל מערכת
@@ -750,7 +773,7 @@
     <p style="font-size:.78rem;color:var(--muted);margin-top:8px">אירועים שיישלחו: חיבור בוט · שליחה אוטומטית · תזכורות יומיות · סנכרון לוח שנה</p>
   </div>
 
-  <div class="card card-wide">
+  <div class="card card-wide" data-card-id="activity-log">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       לוג פעילות (בזמן אמת)
@@ -761,7 +784,12 @@
 
 <!-- ══════════════════ CALENDAR ══════════════════ -->
 <div id="tab-calendar" class="page">
-  <div class="card card-wide">
+  <div class="layout-bar card-wide" data-layout-tab="calendar">
+    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('calendar')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
+    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
+    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+  </div>
+  <div class="card card-wide" data-card-id="calendar">
     <div class="cal-header">
       <div class="cal-nav">
         <button class="btn btn-gray" onclick="calNav(-1)">‹</button>
@@ -797,8 +825,14 @@
 <!-- ══════════════════ SETTINGS ══════════════════ -->
 <div id="tab-settings" class="page">
 
+  <div class="layout-bar card-wide" data-layout-tab="settings">
+    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('settings')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
+    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
+    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+  </div>
+
   <!-- Display preferences card -->
-  <div class="card">
+  <div class="card" data-card-id="appearance">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       מראה ונוחות
@@ -827,7 +861,7 @@
     </div>
   </div>
 
-  <div class="card card-wide">
+  <div class="card card-wide" data-card-id="wa-groups">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
       <span style="display:flex;align-items:center;gap:7px">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -843,7 +877,7 @@
     <div id="wa-groups-loading" style="font-size:.85rem;color:var(--muted)">טוען קבוצות...</div>
   </div>
 
-  <div class="card">
+  <div class="card" data-card-id="sync-window">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       חלון סנכרון
@@ -854,7 +888,7 @@
     </div>
   </div>
 
-  <div class="card card-wide">
+  <div class="card card-wide" data-card-id="daily-reminder">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0;flex:1">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.57 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -883,7 +917,7 @@
   </div>
 
   <!-- ── Location for weather ── -->
-  <div class="card">
+  <div class="card" data-card-id="location">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 14-8 14S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>
       מיקום (למזג אוויר)
@@ -902,7 +936,7 @@
   </div>
 
   <!-- ── Auto dispatch & group reminders ── -->
-  <div class="card card-wide">
+  <div class="card card-wide" data-card-id="auto-dispatch">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       תזמון שליחה אוטומטית
@@ -962,7 +996,7 @@
   </div>
 
   <!-- ── Theme color ── -->
-  <div class="card">
+  <div class="card" data-card-id="theme">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125 0-.92.742-1.562 1.438-1.562h1.664C18.988 16.5 22 13.5 22 10 22 5.5 17.5 2 12 2z"/></svg>
       צבע ערכת נושא
@@ -982,7 +1016,7 @@
   </div>
 
   <!-- ── Logo ── -->
-  <div class="card card-wide">
+  <div class="card card-wide" data-card-id="logo">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
       לוגו המערכת
@@ -1045,8 +1079,14 @@
 <!-- ══════════════════ EXCEL ══════════════════ -->
 <div id="tab-excel" class="page">
 
+  <div class="layout-bar card-wide" data-layout-tab="excel">
+    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('excel')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
+    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
+    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+  </div>
+
   <!-- Weather card -->
-  <div class="card card-wide" id="weather-card" style="display:none">
+  <div class="card card-wide" id="weather-card" data-card-id="weather" style="display:none">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
       תחזית מזג אוויר
@@ -1062,7 +1102,7 @@
     <span style="margin-right:auto;font-size:.78rem;font-weight:400;opacity:.7">תזכורת יומית פעילה</span>
   </div>
 
-  <div class="card">
+  <div class="card" data-card-id="upload">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       העלאת תוכנית עבודה שבועית
@@ -1079,7 +1119,7 @@
     </div>
   </div>
 
-  <div class="card card-wide" id="group-map-card">
+  <div class="card card-wide" id="group-map-card" data-card-id="group-map">
     <div class="card-title">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       מיפוי קבוצות
@@ -1092,7 +1132,7 @@
     </div>
   </div>
 
-  <div class="card card-wide" id="excel-preview-card" style="display:none">
+  <div class="card card-wide" id="excel-preview-card" data-card-id="excel-preview" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div class="card-title" style="margin-bottom:0">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -2420,6 +2460,7 @@ async function loadSettings() {
   try {
     const cfg = await fetch(`${API_BASE}/config`).then(r => r.json());
     if (cfg.calendarColors) calendarColors = cfg.calendarColors;
+    if (cfg.cardLayouts) { cardLayouts = cfg.cardLayouts; ['dashboard','excel','calendar','settings'].forEach(applyCardLayout); }
     settingsGroups = [...cfg.groups];
     fetchWAGroups(); // populate checkboxes with live WA groups
     document.getElementById('sync-hours').value = cfg.syncWindowHours;
@@ -2662,6 +2703,117 @@ function showPushNotification(title, body) {
   if (document.visibilityState === 'visible') return; // tab is active, no need
   try { new Notification(title, { body, icon: '/logo-default.svg', dir: 'rtl', lang: 'he' }); } catch {}
 }
+
+// ── Card Layout (drag-drop + show/hide) ──────────────────────────────────────
+let cardLayouts = {};
+let _layoutEditTab = null;
+let _dragSrc = null;
+
+function applyCardLayout(tabName) {
+  const tab = document.getElementById('tab-' + tabName);
+  if (!tab) return;
+  const layout = cardLayouts[tabName] || {};
+  const hidden = layout.hidden || [];
+  const order  = layout.order  || [];
+  tab.querySelectorAll('[data-card-id]').forEach(card => {
+    card.dataset.hidden = hidden.includes(card.dataset.cardId) ? 'true' : 'false';
+  });
+  if (order.length > 0) {
+    const cards = [...tab.querySelectorAll('[data-card-id]')];
+    cards.sort((a, b) => {
+      const ai = order.indexOf(a.dataset.cardId), bi = order.indexOf(b.dataset.cardId);
+      if (ai < 0 && bi < 0) return 0; if (ai < 0) return 1; if (bi < 0) return -1; return ai - bi;
+    }).forEach(c => tab.appendChild(c));
+  }
+  _updateRestoreChips(tabName);
+}
+
+function _saveCardLayout(tabName) {
+  const tab = document.getElementById('tab-' + tabName);
+  if (!tab) return;
+  const cards = [...tab.querySelectorAll('[data-card-id]')];
+  cardLayouts[tabName] = { order: cards.map(c => c.dataset.cardId), hidden: cards.filter(c => c.dataset.hidden === 'true').map(c => c.dataset.cardId) };
+  fetch(`${API_BASE}/config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cardLayouts }) }).catch(()=>{});
+}
+
+function toggleLayoutEdit(tabName) {
+  const isEditing = _layoutEditTab === tabName;
+  if (_layoutEditTab) _exitLayoutEdit(_layoutEditTab);
+  if (!isEditing) _enterLayoutEdit(tabName);
+}
+
+function _enterLayoutEdit(tabName) {
+  _layoutEditTab = tabName;
+  document.body.classList.add('layout-editing');
+  const tab = document.getElementById('tab-' + tabName);
+  if (!tab) return;
+  tab.querySelectorAll('[data-card-id]').forEach(card => {
+    if (!card.querySelector('.card-drag-handle')) {
+      const h = document.createElement('span'); h.className = 'card-drag-handle'; h.title = 'גרור'; h.textContent = '⠿'; card.appendChild(h);
+    }
+    if (!card.querySelector('.card-hide-btn')) {
+      const b = document.createElement('button'); b.className = 'card-hide-btn'; b.title = 'הסתר'; b.textContent = '👁';
+      b.onclick = (e) => { e.stopPropagation(); hideCard(tabName, card.dataset.cardId); }; card.appendChild(b);
+    }
+    card.setAttribute('draggable','true');
+    card.addEventListener('dragstart', _onDragStart); card.addEventListener('dragover', _onDragOver);
+    card.addEventListener('dragleave', _onDragLeave); card.addEventListener('drop', _onDrop); card.addEventListener('dragend', _onDragEnd);
+  });
+  const btn = tab.querySelector('.layout-edit-btn'); if (btn) btn.textContent = '✓ סיים עריכה';
+  _updateRestoreChips(tabName);
+}
+
+function _exitLayoutEdit(tabName) {
+  _layoutEditTab = null;
+  document.body.classList.remove('layout-editing');
+  const tab = document.getElementById('tab-' + tabName);
+  if (!tab) return;
+  tab.querySelectorAll('[data-card-id]').forEach(card => {
+    card.setAttribute('draggable','false');
+    card.removeEventListener('dragstart',_onDragStart); card.removeEventListener('dragover',_onDragOver);
+    card.removeEventListener('dragleave',_onDragLeave); card.removeEventListener('drop',_onDrop); card.removeEventListener('dragend',_onDragEnd);
+  });
+  const btn = tab.querySelector('.layout-edit-btn'); if (btn) btn.textContent = '✦ ערוך פריסה';
+}
+
+function hideCard(tabName, cardId) {
+  const tab = document.getElementById('tab-' + tabName);
+  const card = tab?.querySelector(`[data-card-id="${cardId}"]`);
+  if (card) card.dataset.hidden = 'true';
+  _saveCardLayout(tabName); _updateRestoreChips(tabName);
+}
+
+function showCard(tabName, cardId) {
+  const tab = document.getElementById('tab-' + tabName);
+  const card = tab?.querySelector(`[data-card-id="${cardId}"]`);
+  if (card) card.dataset.hidden = 'false';
+  _saveCardLayout(tabName); _updateRestoreChips(tabName);
+}
+
+function _updateRestoreChips(tabName) {
+  const tab = document.getElementById('tab-' + tabName);
+  const container = tab?.querySelector('.layout-hidden-restore');
+  if (!container) return;
+  const hidden = [...tab.querySelectorAll('[data-card-id][data-hidden="true"]')];
+  if (!hidden.length) { container.innerHTML = ''; return; }
+  container.innerHTML = '<span style="font-size:.78rem;color:var(--muted);margin-left:4px">מוסתרים:</span>' +
+    hidden.map(c => { const t = c.querySelector('.card-title')?.textContent?.trim().replace(/\s+/g,' ').slice(0,20) || c.dataset.cardId; return `<span class="restore-chip" onclick="showCard('${tabName}','${c.dataset.cardId}')" title="הצג מחדש">+ ${t}</span>`; }).join('');
+}
+
+function _onDragStart(e) { _dragSrc = this; e.dataTransfer.effectAllowed='move'; setTimeout(()=>this.classList.add('dragging'),0); }
+function _onDragOver(e)  { e.preventDefault(); if(this!==_dragSrc&&this.dataset.cardId) this.classList.add('drag-over'); }
+function _onDragLeave()  { this.classList.remove('drag-over'); }
+function _onDrop(e) {
+  e.stopPropagation(); this.classList.remove('drag-over');
+  if (_dragSrc && _dragSrc !== this && this.dataset.cardId) {
+    const parent = this.parentNode;
+    const all = [...parent.querySelectorAll('[data-card-id]')];
+    const si = all.indexOf(_dragSrc), ti = all.indexOf(this);
+    if (si < ti) parent.insertBefore(_dragSrc, this.nextSibling); else parent.insertBefore(_dragSrc, this);
+    _saveCardLayout(parent.id.replace('tab-',''));
+  }
+}
+function _onDragEnd() { this.classList.remove('dragging'); document.querySelectorAll('.drag-over').forEach(c=>c.classList.remove('drag-over')); _dragSrc=null; }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Dark mode: restore from localStorage or follow system preference
