@@ -112,10 +112,12 @@
 
     /* ── Pages ── */
     .page { display: none; padding: 24px; }
-    .page.active { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; align-content: start; }
+    .page.active { display: flex; flex-wrap: wrap; gap: 14px; align-content: start; }
 
-    /* Full-width card inside auto-fill grid */
-    .card-wide { grid-column: 1 / -1; }
+    /* Cards in page flex container */
+    .card-wide { flex: 1 1 100%; max-width: 100%; }
+    /* Full-width non-card items in page (badges, result boxes) */
+    #saved-plan-badge, #auto-dispatch-badge, .excel-results { flex: 1 1 100%; }
 
     /* ── Cards ── */
     .card {
@@ -124,6 +126,8 @@
       padding: 18px 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px var(--border);
       border: none;
+      flex: 1 1 290px;
+      min-width: 0;
     }
     .card-title {
       font-size: .85rem;
@@ -321,7 +325,7 @@
     .group-map-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
     .group-map-table td { padding: 7px 8px; }
     .group-map-table input { width: 200px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: .9rem; }
-    .excel-results { margin-top: 10px; padding: 12px 16px; background: #f9fafb; border-radius: 10px; font-size: .87rem; display: none; border: 1px solid var(--border); }
+    .excel-results { padding: 12px 16px; background: #f9fafb; border-radius: 10px; font-size: .87rem; display: none; border: 1px solid var(--border); }
 
     /* ── Upload area ── */
     .upload-area {
@@ -552,8 +556,8 @@
       #settings-save-bar { left: 0; }
 
       body    { padding-bottom: 62px; }
-      .page   { padding: 14px 12px 78px; grid-template-columns: 1fr; }
-      .card   { padding: 14px 14px; }
+      .page   { padding: 14px 12px 78px; }
+      .card   { padding: 14px 14px; flex: 1 1 100%; }
 
       #log-panel { height: 180px; }
 
@@ -1033,7 +1037,7 @@
     <div id="weather-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
   </div>
 
-  <div id="saved-plan-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:9px 14px;font-size:.87rem;font-weight:600;display:flex;align-items:center;gap:8px;grid-column:1/-1">
+  <div id="saved-plan-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:9px 14px;font-size:.87rem;font-weight:600;align-items:center;gap:8px">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     <span id="saved-plan-badge-text"></span>
     <span style="margin-right:auto;font-size:.78rem;font-weight:400;opacity:.7">תזכורת יומית פעילה</span>
@@ -1125,8 +1129,8 @@
     </div>
   </div>
 
-  <div class="excel-results" id="excel-results" style="grid-column:1/-1"></div>
-  <div id="auto-dispatch-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:8px 14px;font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:7px;grid-column:1/-1">
+  <div class="excel-results" id="excel-results"></div>
+  <div id="auto-dispatch-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:8px 14px;font-size:.84rem;font-weight:600;align-items:center;gap:7px">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     <span id="auto-dispatch-badge-text"></span>
   </div>
