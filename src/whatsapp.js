@@ -15,6 +15,21 @@ let botEnabled = true; // controlled by UI on/off toggle
 let groupIdCache = {}; // { groupName: chatId._serialized } — last entry wins for duplicate names
 let groupDetailsCache = []; // [{ name, id }] — ALL groups, preserves duplicates
 
+// In-memory ring buffer of recent messages (up to 24h) from real-time listener
+const _msgHistory = [];
+const MSG_HISTORY_MAX_HOURS = 24;
+
+function _pushHistory(entry) {
+  _msgHistory.push(entry);
+  const cutoff = Date.now() / 1000 - MSG_HISTORY_MAX_HOURS * 3600;
+  while (_msgHistory.length > 0 && _msgHistory[0].timestamp < cutoff) _msgHistory.shift();
+}
+
+export function getRecentMessagesFromHistory(hours) {
+  const cutoff = Date.now() / 1000 - hours * 3600;
+  return _msgHistory.filter(m => m.timestamp >= cutoff);
+}
+
 export function isBotEnabled() { return botEnabled; }
 
 function log(msg) {
@@ -143,7 +158,9 @@ export function initWhatsApp() {
         return;
       }
       log(`Message received in "${groupName}" from ${senderPhone}: "${(message.body||'').slice(0,60)}"`);
-      whatsappEvents.emit('message', { body: message.body, groupName, timestamp: message.timestamp, senderPhone });
+      const entry = { body: message.body, groupName, timestamp: message.timestamp, senderPhone };
+      _pushHistory(entry);
+      whatsappEvents.emit('message', entry);
     } catch (err) {
       log('Error handling message: ' + err.message);
     }

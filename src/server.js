@@ -31,7 +31,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import QRCode from 'qrcode';
 
-import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails } from './whatsapp.js';
+import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
 import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview } from './config.js';
@@ -577,9 +577,9 @@ app.post('/trigger/task-detection', async (req, res) => {
   const cfg = getConfig();
   if (!cfg.taskDetectionEnabled) return res.json({ ok: false, error: 'Task detection is disabled' });
   try {
-    log(`[TaskDetection] Manual backfill: fetching last ${hours}h of messages...`);
-    const messages = await fetchRecentMessages(hours);
-    log(`[TaskDetection] Backfill: ${messages.length} messages fetched`);
+    log(`[TaskDetection] Manual backfill: scanning last ${hours}h from message history...`);
+    const messages = getRecentMessagesFromHistory(hours);
+    log(`[TaskDetection] Backfill: ${messages.length} messages in history`);
     const results = [];
     for (const { body, groupName, senderPhone } of messages) {
       const trimmed = (body || '').trim();
