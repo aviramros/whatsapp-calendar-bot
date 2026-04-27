@@ -653,22 +653,36 @@
       .toast { min-width: unset; max-width: unset; width: 100%; }
     }
     /* ── Layout editing ── */
-    .layout-bar { display:flex; align-items:center; gap:10px; padding:6px 0; min-height:0; background:transparent; border:none; box-shadow:none; }
-    [data-card-id] { transition: opacity .15s, box-shadow .15s; }
-    [data-card-id].dragging { opacity:.45; box-shadow:0 8px 24px rgba(0,0,0,.18); }
-    [data-card-id].drag-over { box-shadow:0 0 0 2px var(--teal) !important; }
+    .layout-bar { display:flex; align-items:center; padding:6px 0; min-height:0; background:transparent; border:none; box-shadow:none; }
     [data-card-id][data-hidden="true"] { display:none !important; }
-    .card-drag-handle { display:none; position:absolute; top:10px; left:10px; cursor:grab; color:#9ca3af; font-size:1.1rem; padding:2px 4px; border-radius:4px; z-index:2; }
-    .card-drag-handle:hover { color:var(--teal); background:var(--teal-light); }
-    .card-hide-btn { display:none; position:absolute; top:8px; right:10px; cursor:pointer; background:none; border:none; color:#9ca3af; font-size:.88rem; padding:2px 5px; border-radius:4px; z-index:2; }
-    .card-hide-btn:hover { background:#fee2e2; color:#dc2626; }
-    body.layout-editing [data-card-id] { position:relative; }
-    body.layout-editing .card-drag-handle,
-    body.layout-editing .card-hide-btn { display:block; }
-    body.layout-editing .layout-edit-hint { display:inline !important; }
-    body.layout-editing .layout-hidden-restore { display:flex !important; }
-    .restore-chip { font-size:.76rem; padding:3px 10px; border-radius:14px; background:#f3f4f6; border:1px solid var(--border); cursor:pointer; color:var(--muted); }
-    .restore-chip:hover { background:var(--teal-light); color:var(--teal); }
+    /* Layout dropdown */
+    .layout-btn-wrap { position:relative; display:inline-flex; }
+    .layout-edit-btn { display:flex; align-items:center; gap:7px; font-size:.82rem; padding:6px 14px; }
+    .layout-edit-btn svg { flex-shrink:0; transition: transform .2s; }
+    .layout-edit-btn svg.rotated { transform: rotate(180deg); }
+    .layout-dropdown {
+      position:absolute; top:calc(100% + 8px); right:0;
+      background:#fff; border-radius:14px;
+      box-shadow:0 8px 32px rgba(0,0,0,.16); z-index:300;
+      min-width:250px; max-width:340px;
+    }
+    .layout-dd-header { padding:12px 16px 8px; font-size:.78rem; color:var(--muted); font-weight:600; border-bottom:1px solid var(--border); }
+    .layout-dd-list { list-style:none; padding:6px 0; margin:0; }
+    .layout-dd-item {
+      display:flex; align-items:center; gap:10px;
+      padding:9px 14px; cursor:default; user-select:none;
+      transition:background .1s;
+    }
+    .layout-dd-item:hover { background:#f7f8fa; }
+    .layout-dd-item.dd-dragging { opacity:.35; }
+    .layout-dd-item.dd-drag-over { box-shadow:inset 0 -2px 0 var(--teal); }
+    .layout-dd-handle { color:#b0b7c3; cursor:grab; flex-shrink:0; display:flex; align-items:center; }
+    .layout-dd-handle:hover { color:var(--teal); }
+    .layout-dd-label { flex:1; font-size:.86rem; font-weight:500; text-align:right; }
+    .layout-dd-check { flex-shrink:0; width:16px; height:16px; accent-color:var(--teal); cursor:pointer; }
+    .layout-dd-footer { padding:10px 14px 12px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; }
+    body.dark .layout-dropdown { background:#1e2a3d; box-shadow:0 8px 32px rgba(0,0,0,.45); }
+    body.dark .layout-dd-item:hover { background:#253347; }
   </style>
 </head>
 <body>
@@ -756,9 +770,14 @@
 <div id="tab-dashboard" class="page active">
 
   <div class="layout-bar card-wide" data-layout-tab="dashboard">
-    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('dashboard')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
-    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
-    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+    <div class="layout-btn-wrap">
+      <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutDropdown('dashboard')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        ערוך פריסה
+        <svg id="layout-chevron-dashboard" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="layout-dropdown" id="layout-dd-dashboard" style="display:none"></div>
+    </div>
   </div>
 
     <div class="card" data-card-id="status">
@@ -825,9 +844,14 @@
 <!-- ══════════════════ CALENDAR ══════════════════ -->
 <div id="tab-calendar" class="page">
   <div class="layout-bar card-wide" data-layout-tab="calendar">
-    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('calendar')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
-    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
-    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+    <div class="layout-btn-wrap">
+      <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutDropdown('calendar')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        ערוך פריסה
+        <svg id="layout-chevron-calendar" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="layout-dropdown" id="layout-dd-calendar" style="display:none"></div>
+    </div>
   </div>
   <div class="card card-wide" data-card-id="calendar">
     <div class="cal-header">
@@ -866,9 +890,14 @@
 <div id="tab-settings" class="page">
 
   <div class="layout-bar card-wide" data-layout-tab="settings">
-    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('settings')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
-    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
-    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+    <div class="layout-btn-wrap">
+      <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutDropdown('settings')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        ערוך פריסה
+        <svg id="layout-chevron-settings" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="layout-dropdown" id="layout-dd-settings" style="display:none"></div>
+    </div>
   </div>
 
   <!-- Display preferences card -->
@@ -1130,9 +1159,14 @@
 <div id="tab-excel" class="page">
 
   <div class="layout-bar card-wide" data-layout-tab="excel">
-    <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutEdit('excel')" style="font-size:.82rem;padding:5px 14px">✦ ערוך פריסה</button>
-    <span class="layout-edit-hint" style="display:none;font-size:.8rem;color:var(--muted)">גרור כרטיסים לסידור • לחץ 👁 להסתרה</span>
-    <div class="layout-hidden-restore" style="display:none;margin-right:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+    <div class="layout-btn-wrap">
+      <button class="btn btn-gray layout-edit-btn" onclick="toggleLayoutDropdown('excel')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        ערוך פריסה
+        <svg id="layout-chevron-excel" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="layout-dropdown" id="layout-dd-excel" style="display:none"></div>
+    </div>
   </div>
 
   <!-- Weather card -->
@@ -2794,10 +2828,29 @@ function showPushNotification(title, body) {
   try { new Notification(title, { body, icon: '/logo-default.svg', dir: 'rtl', lang: 'he' }); } catch {}
 }
 
-// ── Card Layout (drag-drop + show/hide) ──────────────────────────────────────
+// ── Card Layout (dropdown) ────────────────────────────────────────────────────
 let cardLayouts = {};
-let _layoutEditTab = null;
-let _dragSrc = null;
+let _openLayoutTab = null;
+
+const CARD_LABELS = {
+  'status':         'סטטוס בוט',
+  'sync':           'סנכרון יומן',
+  'admin-notify':   'התראות מנהל',
+  'activity-log':   'יומן פעילות',
+  'calendar':       'לוח שנה',
+  'appearance':     'מראה ותצוגה',
+  'wa-groups':      'קבוצות WhatsApp',
+  'sync-window':    'חלון סנכרון',
+  'daily-reminder': 'תזכורת יומית',
+  'location':       'מיקום',
+  'auto-dispatch':  'תזמון שליחה',
+  'theme':          'ערכת צבעים',
+  'logo':           'לוגו',
+  'weather':        'תחזית מזג האוויר',
+  'upload':         'העלאת תוכנית שבועית',
+  'group-map':      'מיפוי קבוצות',
+  'excel-preview':  'תצוגה מקדימה',
+};
 
 function applyCardLayout(tabName) {
   const tab = document.getElementById('tab-' + tabName);
@@ -2815,95 +2868,119 @@ function applyCardLayout(tabName) {
       if (ai < 0 && bi < 0) return 0; if (ai < 0) return 1; if (bi < 0) return -1; return ai - bi;
     }).forEach(c => tab.appendChild(c));
   }
-  _updateRestoreChips(tabName);
 }
 
-function _saveCardLayout(tabName) {
+function toggleLayoutDropdown(tabName) {
+  if (_openLayoutTab === tabName) { closeLayoutDropdown(); return; }
+  if (_openLayoutTab) closeLayoutDropdown();
+  openLayoutDropdown(tabName);
+}
+
+function openLayoutDropdown(tabName) {
+  _openLayoutTab = tabName;
   const tab = document.getElementById('tab-' + tabName);
-  if (!tab) return;
+  const dd  = document.getElementById('layout-dd-' + tabName);
+  if (!dd || !tab) return;
+
   const cards = [...tab.querySelectorAll('[data-card-id]')];
-  cardLayouts[tabName] = { order: cards.map(c => c.dataset.cardId), hidden: cards.filter(c => c.dataset.hidden === 'true').map(c => c.dataset.cardId) };
+  let ddDragSrc = null;
+
+  const ul = document.createElement('ul');
+  ul.className = 'layout-dd-list';
+
+  cards.forEach(card => {
+    const id      = card.dataset.cardId;
+    const isHidden = card.dataset.hidden === 'true';
+    const label   = CARD_LABELS[id] || id;
+    const li = document.createElement('li');
+    li.className = 'layout-dd-item';
+    li.dataset.cardId = id;
+    li.draggable = true;
+    li.innerHTML = `
+      <span class="layout-dd-handle" title="גרור לסידור">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <circle cx="3" cy="6" r=".6" fill="currentColor"/><circle cx="3" cy="12" r=".6" fill="currentColor"/><circle cx="3" cy="18" r=".6" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="layout-dd-label">${label}</span>
+      <input type="checkbox" class="layout-dd-check" ${isHidden ? '' : 'checked'} title="הצג / הסתר">
+    `;
+    li.addEventListener('dragstart', e => {
+      ddDragSrc = li; e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => li.classList.add('dd-dragging'), 0);
+    });
+    li.addEventListener('dragover', e => { e.preventDefault(); if (li !== ddDragSrc) li.classList.add('dd-drag-over'); });
+    li.addEventListener('dragleave', () => li.classList.remove('dd-drag-over'));
+    li.addEventListener('drop', e => {
+      e.stopPropagation(); li.classList.remove('dd-drag-over');
+      if (ddDragSrc && ddDragSrc !== li) {
+        const items = [...ul.querySelectorAll('.layout-dd-item')];
+        const si = items.indexOf(ddDragSrc), ti = items.indexOf(li);
+        if (si < ti) ul.insertBefore(ddDragSrc, li.nextSibling); else ul.insertBefore(ddDragSrc, li);
+      }
+    });
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dd-dragging');
+      ul.querySelectorAll('.dd-drag-over').forEach(x => x.classList.remove('dd-drag-over'));
+      ddDragSrc = null;
+    });
+    ul.appendChild(li);
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'layout-dd-footer';
+  footer.innerHTML = `<button class="btn btn-teal" style="font-size:.82rem;padding:6px 22px" onclick="saveLayoutFromDropdown('${tabName}')">שמור</button>`;
+
+  dd.innerHTML = '';
+  dd.appendChild(ul);
+  dd.appendChild(footer);
+  dd.style.display = 'block';
+
+  const chevron = document.getElementById('layout-chevron-' + tabName);
+  if (chevron) chevron.style.transform = 'rotate(180deg)';
+}
+
+function closeLayoutDropdown() {
+  if (!_openLayoutTab) return;
+  const dd = document.getElementById('layout-dd-' + _openLayoutTab);
+  if (dd) dd.style.display = 'none';
+  const chevron = document.getElementById('layout-chevron-' + _openLayoutTab);
+  if (chevron) chevron.style.transform = '';
+  _openLayoutTab = null;
+}
+
+function saveLayoutFromDropdown(tabName) {
+  const tab = document.getElementById('tab-' + tabName);
+  const dd  = document.getElementById('layout-dd-' + tabName);
+  if (!tab || !dd) return;
+
+  const items  = [...dd.querySelectorAll('.layout-dd-item')];
+  const order  = items.map(li => li.dataset.cardId);
+  const hidden = items.filter(li => !li.querySelector('.layout-dd-check')?.checked).map(li => li.dataset.cardId);
+
+  // Apply order to actual tab
+  order.forEach(id => {
+    const card = tab.querySelector(`[data-card-id="${id}"]`);
+    if (card) tab.appendChild(card);
+  });
+
+  // Apply visibility
+  tab.querySelectorAll('[data-card-id]').forEach(card => {
+    card.dataset.hidden = hidden.includes(card.dataset.cardId) ? 'true' : 'false';
+  });
+
+  cardLayouts[tabName] = { order, hidden };
   fetch(`${API_BASE}/config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cardLayouts }) }).catch(()=>{});
+
+  closeLayoutDropdown();
+  toast('פריסה נשמרה', 'success');
 }
 
-function toggleLayoutEdit(tabName) {
-  const isEditing = _layoutEditTab === tabName;
-  if (_layoutEditTab) _exitLayoutEdit(_layoutEditTab);
-  if (!isEditing) _enterLayoutEdit(tabName);
-}
-
-function _enterLayoutEdit(tabName) {
-  _layoutEditTab = tabName;
-  document.body.classList.add('layout-editing');
-  const tab = document.getElementById('tab-' + tabName);
-  if (!tab) return;
-  tab.querySelectorAll('[data-card-id]').forEach(card => {
-    if (!card.querySelector('.card-drag-handle')) {
-      const h = document.createElement('span'); h.className = 'card-drag-handle'; h.title = 'גרור'; h.textContent = '⠿'; card.appendChild(h);
-    }
-    if (!card.querySelector('.card-hide-btn')) {
-      const b = document.createElement('button'); b.className = 'card-hide-btn'; b.title = 'הסתר'; b.textContent = '👁';
-      b.onclick = (e) => { e.stopPropagation(); hideCard(tabName, card.dataset.cardId); }; card.appendChild(b);
-    }
-    card.setAttribute('draggable','true');
-    card.addEventListener('dragstart', _onDragStart); card.addEventListener('dragover', _onDragOver);
-    card.addEventListener('dragleave', _onDragLeave); card.addEventListener('drop', _onDrop); card.addEventListener('dragend', _onDragEnd);
-  });
-  const btn = tab.querySelector('.layout-edit-btn'); if (btn) btn.textContent = '✓ סיים עריכה';
-  _updateRestoreChips(tabName);
-}
-
-function _exitLayoutEdit(tabName) {
-  _layoutEditTab = null;
-  document.body.classList.remove('layout-editing');
-  const tab = document.getElementById('tab-' + tabName);
-  if (!tab) return;
-  tab.querySelectorAll('[data-card-id]').forEach(card => {
-    card.setAttribute('draggable','false');
-    card.removeEventListener('dragstart',_onDragStart); card.removeEventListener('dragover',_onDragOver);
-    card.removeEventListener('dragleave',_onDragLeave); card.removeEventListener('drop',_onDrop); card.removeEventListener('dragend',_onDragEnd);
-  });
-  const btn = tab.querySelector('.layout-edit-btn'); if (btn) btn.textContent = '✦ ערוך פריסה';
-}
-
-function hideCard(tabName, cardId) {
-  const tab = document.getElementById('tab-' + tabName);
-  const card = tab?.querySelector(`[data-card-id="${cardId}"]`);
-  if (card) card.dataset.hidden = 'true';
-  _saveCardLayout(tabName); _updateRestoreChips(tabName);
-}
-
-function showCard(tabName, cardId) {
-  const tab = document.getElementById('tab-' + tabName);
-  const card = tab?.querySelector(`[data-card-id="${cardId}"]`);
-  if (card) card.dataset.hidden = 'false';
-  _saveCardLayout(tabName); _updateRestoreChips(tabName);
-}
-
-function _updateRestoreChips(tabName) {
-  const tab = document.getElementById('tab-' + tabName);
-  const container = tab?.querySelector('.layout-hidden-restore');
-  if (!container) return;
-  const hidden = [...tab.querySelectorAll('[data-card-id][data-hidden="true"]')];
-  if (!hidden.length) { container.innerHTML = ''; return; }
-  container.innerHTML = '<span style="font-size:.78rem;color:var(--muted);margin-left:4px">מוסתרים:</span>' +
-    hidden.map(c => { const t = c.querySelector('.card-title')?.textContent?.trim().replace(/\s+/g,' ').slice(0,20) || c.dataset.cardId; return `<span class="restore-chip" onclick="showCard('${tabName}','${c.dataset.cardId}')" title="הצג מחדש">+ ${t}</span>`; }).join('');
-}
-
-function _onDragStart(e) { _dragSrc = this; e.dataTransfer.effectAllowed='move'; setTimeout(()=>this.classList.add('dragging'),0); }
-function _onDragOver(e)  { e.preventDefault(); if(this!==_dragSrc&&this.dataset.cardId) this.classList.add('drag-over'); }
-function _onDragLeave()  { this.classList.remove('drag-over'); }
-function _onDrop(e) {
-  e.stopPropagation(); this.classList.remove('drag-over');
-  if (_dragSrc && _dragSrc !== this && this.dataset.cardId) {
-    const parent = this.parentNode;
-    const all = [...parent.querySelectorAll('[data-card-id]')];
-    const si = all.indexOf(_dragSrc), ti = all.indexOf(this);
-    if (si < ti) parent.insertBefore(_dragSrc, this.nextSibling); else parent.insertBefore(_dragSrc, this);
-    _saveCardLayout(parent.id.replace('tab-',''));
-  }
-}
-function _onDragEnd() { this.classList.remove('dragging'); document.querySelectorAll('.drag-over').forEach(c=>c.classList.remove('drag-over')); _dragSrc=null; }
+// Close layout dropdown on outside click
+document.addEventListener('click', e => {
+  if (_openLayoutTab && !e.target.closest('.layout-btn-wrap')) closeLayoutDropdown();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Dark mode: restore from localStorage or follow system preference
