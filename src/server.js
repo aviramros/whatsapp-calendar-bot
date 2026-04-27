@@ -404,6 +404,46 @@ async function sendTomorrowTasksToGroups() {
   notifyAdmin(`⏰ תזכורות מחר (${dayName}) — ${remindersSent}/${groupCount} קבוצות קיבלו${remindersFailed ? ` ❌ ${remindersFailed} נכשלו` : ' ✅'}`);
 }
 
+/**
+ * Sends the full tomorrow-tasks reminder for a single group.
+ * Used when a task is detected AFTER the scheduled reminder already went out.
+ */
+async function sendTomorrowReminderForGroup(groupName) {
+  const config = getConfig();
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) return false;
+
+  const tomorrow = getTomorrowISO();
+  const tasks = plan.tasks.filter(t =>
+    t.dateISO === tomorrow &&
+    (t.whatsappGroup === groupName || t.whatsappGroupId === groupName)
+  );
+  if (!tasks.length) return false;
+
+  const sendKey = tasks[0].whatsappGroupId || groupName;
+  const dayName = getHebrewDayName(tomorrow);
+  const weather = await fetchWeatherForDate(tomorrow);
+
+  let msg = `📋 *עדכון משימות מחר — ${dayName} ${tasks[0].dateLabel}:*\n\n`;
+  tasks.forEach(t => { msg += `• ${t.taskText}${t.isAIDetected ? ' ✨' : ''}\n`; });
+  if (weather) {
+    msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+  }
+
+  const ok = await sendWhatsAppMessage(sendKey, msg.trim(), { pin: config.pinMessages === true });
+  log(`[TaskDetection] Full reminder re-sent to "${groupName}" (${tasks.length} tasks) ${ok ? '✅' : '❌'}`);
+  return ok;
+}
+
+function reminderAlreadySentToday() {
+  const cfg = getConfig();
+  if (!cfg.groupRemindersEnabled) return false;
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+  const h = cfg.groupRemindersHour ?? 7;
+  const m = cfg.groupRemindersMinute ?? 0;
+  return now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
+}
+
 // ─── Weekly summary ───────────────────────────────────────────────────────────
 
 export async function sendWeeklySummary() {
@@ -929,10 +969,18 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
                   saveWeeklyPlan(plan);
                   broadcast('weeklyPlanUpdated', {});
 
-                  // 3. Send WhatsApp follow-up
-                  const msg = formatFollowUp(grp, tasks, calendarAdded > 0);
-                  log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks, ${calendarAdded} to calendar)`);
-                  await sendWhatsAppMessage(grp, msg);
+                  // 3. Send WhatsApp message
+                  const hasTomorrowTask = tasks.some(t => (t.date || getTomorrowISO()) === getTomorrowISO());
+                  if (hasTomorrowTask && reminderAlreadySentToday()) {
+                    // Reminder already went out today — re-send full updated list
+                    log(`[TaskDetection] Reminder already sent today, re-sending full list to "${grp}"`);
+                    await sendTomorrowReminderForGroup(grp);
+                  } else {
+                    // Reminder hasn't gone out yet — follow-up is enough, task will be included
+                    const msg = formatFollowUp(grp, tasks, calendarAdded > 0);
+                    log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks, ${calendarAdded} to calendar)`);
+                    await sendWhatsAppMessage(grp, msg);
+                  }
                 }
               );
             }
