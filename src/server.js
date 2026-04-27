@@ -918,6 +918,9 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
       const admins = cfg.taskDetectionAdmins || [];
       const senderAllowed = admins.length === 0 ||
         (senderPhone && admins.some(a => a.replace(/\D/g,'') === senderPhone.replace(/\D/g,'')));
+      if (!senderAllowed) {
+        log(`[TaskDetection] Sender ${senderPhone} not in authorized list [${admins.join(', ')}] — skipped`);
+      }
       if (senderAllowed && mightBeTask(trimmed)) {
         (async () => {
           try {

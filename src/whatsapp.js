@@ -136,9 +136,13 @@ export function initWhatsApp() {
       const chat = await message.getChat();
       if (!chat.isGroup) return;
       const groupName = chat.name.trim();
-      const { groups } = getConfig();
-      if (!groups.includes(groupName)) return;
       const senderPhone = (message.author || message.from || '').split('@')[0].replace(/\D/g, '');
+      const { groups } = getConfig();
+      if (!groups.includes(groupName)) {
+        log(`Message ignored — group "${groupName}" not in monitored list [${groups.join(', ')}]`);
+        return;
+      }
+      log(`Message received in "${groupName}" from ${senderPhone}: "${(message.body||'').slice(0,60)}"`);
       whatsappEvents.emit('message', { body: message.body, groupName, timestamp: message.timestamp, senderPhone });
     } catch (err) {
       log('Error handling message: ' + err.message);

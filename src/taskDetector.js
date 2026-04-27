@@ -23,7 +23,9 @@ const TIME_WORDS = [
 
 export function mightBeTask(text) {
   if (!text || text.trim().length < 6) return false;
-  return TIME_WORDS.some(w => text.includes(w));
+  const matched = TIME_WORDS.find(w => text.includes(w));
+  if (!matched) log(`Pre-filter: no trigger word found in "${text.slice(0,60)}"`);
+  return !!matched;
 }
 
 // ── Claude classification ────────────────────────────────────────────────────
