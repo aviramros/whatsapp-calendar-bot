@@ -875,7 +875,6 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
     const cfg = getConfig();
     if (cfg.taskDetectionEnabled && groupName && trimmed.length >= 6) {
       if (mightBeTask(trimmed)) {
-        // Don't await — run in background so message handling isn't blocked
         (async () => {
           try {
             const result = await classifyTask(trimmed, groupName);
@@ -886,8 +885,49 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
                 { description: result.description || trimmed, date: result.date, rawText: trimmed },
                 delayMs,
                 async (grp, tasks) => {
-                  const msg = formatFollowUp(grp, tasks);
-                  log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks)`);
+                  // 1. Add tasks to weekly plan
+                  let calendarAdded = 0;
+                  const plan = getWeeklyPlan() || { weekLabel: '', tasks: [] };
+                  for (const task of tasks) {
+                    const dateISO = task.date || getTomorrowISO();
+                    const [, mm, dd] = dateISO.split('-');
+                    const dateLabel = `${parseInt(dd)}.${parseInt(mm)}`;
+                    const fingerprint = `${grp}|${task.description}|${dateISO}|ai`;
+                    if (!plan.tasks.find(t => t.fingerprint === fingerprint)) {
+                      plan.tasks.push({
+                        excelGroup:   grp,
+                        taskText:     task.description,
+                        dateISO,
+                        dateLabel,
+                        whatsappGroup: grp,
+                        fingerprint,
+                        willSend:     false,
+                        alreadySent:  true,
+                        isAIDetected: true,
+                      });
+                    }
+                    // 2. Create Google Calendar event
+                    try {
+                      if (isGoogleAuthenticated()) {
+                        const auth = await getAuthenticatedClient();
+                        const calIds = await resolveCalendarIds(auth);
+                        const calId = await getOrCreateCalendar(auth, grp, calIds);
+                        if (calId) {
+                          await createAllDayEvent(auth, calId, task.description, dateISO);
+                          calendarAdded++;
+                          log(`[TaskDetection] Calendar event created: "${task.description}" on ${dateISO}`);
+                        }
+                      }
+                    } catch (calErr) {
+                      log(`[TaskDetection] Calendar error: ${calErr.message}`);
+                    }
+                  }
+                  saveWeeklyPlan(plan);
+                  broadcast('weeklyPlanUpdated', {});
+
+                  // 3. Send WhatsApp follow-up
+                  const msg = formatFollowUp(grp, tasks, calendarAdded > 0);
+                  log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks, ${calendarAdded} to calendar)`);
                   await sendWhatsAppMessage(grp, msg);
                 }
               );

@@ -84,7 +84,7 @@ export function enqueuePendingTask(groupName, taskInfo, delayMs, onFlush) {
 }
 
 // ── Format follow-up message ─────────────────────────────────────────────────
-export function formatFollowUp(groupName, tasks) {
+export function formatFollowUp(groupName, tasks, addedToCalendar = false) {
   const header = `📋 *עדכון משימות — ${groupName}*\n`;
   const divider = '─'.repeat(20) + '\n';
 
@@ -93,7 +93,10 @@ export function formatFollowUp(groupName, tasks) {
     return `• ${t.description}${datePart}`;
   }).join('\n');
 
-  return `${header}${divider}זוהו ${tasks.length === 1 ? 'משימה חדשה' : `${tasks.length} משימות חדשות`}:\n${lines}`;
+  const taskWord = tasks.length === 1 ? 'משימה חדשה זוהתה' : `${tasks.length} משימות חדשות זוהו`;
+  const calNote  = addedToCalendar ? '\n📅 נוסף ליומן Google' : '';
+
+  return `${header}${divider}${taskWord}:\n${lines}${calNote}`;
 }
 
 function formatDate(iso) {
