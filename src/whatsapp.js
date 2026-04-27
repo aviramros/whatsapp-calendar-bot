@@ -236,12 +236,30 @@ export async function fetchRecentMessages(hours) {
   const found = groups.filter(g => groupIdCache[g]);
   log(`Found ${found.length}/${groups.length} target groups in cache`);
 
+  // Fetch all chats once — these objects are fully loaded (avoids waitForChatLoading bug)
+  let allChats = null;
+  const getLoadedChat = async (chatId, groupName) => {
+    // First try getChatById
+    try {
+      const chat = await withTimeout(client.getChatById(chatId), 15000, `getChatById(${groupName})`);
+      // Quick probe to verify the chat is loaded
+      if (chat && typeof chat.fetchMessages === 'function') return chat;
+    } catch (_) {}
+    // Fallback: use getChats() which returns fully-loaded objects
+    log(`Falling back to getChats() for "${groupName}"...`);
+    if (!allChats) {
+      allChats = await withTimeout(client.getChats(), 60000, 'getChats');
+    }
+    return allChats.find(c => c.id._serialized === chatId) || null;
+  };
+
   for (const groupName of found) {
     const chatId = groupIdCache[groupName];
     log(`Fetching messages from "${groupName}"...`);
     try {
-      const chat = await withTimeout(client.getChatById(chatId), 15000, `getChatById(${groupName})`);
-      const messages = await withTimeout(chat.fetchMessages({ limit: 20 }), 30000, `fetchMessages(${groupName})`);
+      const chat = await getLoadedChat(chatId, groupName);
+      if (!chat) { log(`Group "${groupName}" skipped: chat not found`); continue; }
+      const messages = await withTimeout(chat.fetchMessages({ limit: 50 }), 30000, `fetchMessages(${groupName})`);
       const recent = messages.filter(m => m.timestamp * 1000 >= cutoff);
       log(`Group "${groupName}": fetched ${messages.length} messages, ${recent.length} within ${hours}h`);
       for (const msg of recent) {
@@ -250,7 +268,6 @@ export async function fetchRecentMessages(hours) {
       }
     } catch (err) {
       log(`Group "${groupName}" skipped: ${err.message}`);
-      // If chat not found, invalidate cache entry so it rebuilds next time
       if (err.message.includes('not found') || err.message.includes('timed out')) {
         delete groupIdCache[groupName];
       }
