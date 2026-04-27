@@ -138,7 +138,8 @@ export function initWhatsApp() {
       const groupName = chat.name.trim();
       const { groups } = getConfig();
       if (!groups.includes(groupName)) return;
-      whatsappEvents.emit('message', { body: message.body, groupName, timestamp: message.timestamp });
+      const senderPhone = (message.author || message.from || '').split('@')[0].replace(/\D/g, '');
+      whatsappEvents.emit('message', { body: message.body, groupName, timestamp: message.timestamp, senderPhone });
     } catch (err) {
       log('Error handling message: ' + err.message);
     }

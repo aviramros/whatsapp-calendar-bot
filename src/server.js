@@ -582,6 +582,7 @@ app.post('/config', (req, res) => {
     taskDetectionEnabled:       req.body.taskDetectionEnabled       !== undefined ? Boolean(req.body.taskDetectionEnabled)          : (current.taskDetectionEnabled       ?? false),
     taskDetectionDelay:         req.body.taskDetectionDelay         !== undefined ? Number(req.body.taskDetectionDelay)             : (current.taskDetectionDelay         ?? 5),
     taskDetectionMinConfidence: req.body.taskDetectionMinConfidence !== undefined ? Number(req.body.taskDetectionMinConfidence)      : (current.taskDetectionMinConfidence  ?? 0.75),
+    taskDetectionAdmins:        Array.isArray(req.body.taskDetectionAdmins)       ? req.body.taskDetectionAdmins                    : (current.taskDetectionAdmins        ?? []),
   };
   saveConfig(updated);
 
@@ -815,7 +816,7 @@ whatsappEvents.on('ready', () => {
 whatsappEvents.on('disconnected', () => broadcast('status', { whatsappConnected: false }));
 whatsappEvents.on('qr', () => broadcast('status', { qrAvailable: true }));
 
-whatsappEvents.on('message', async ({ body, groupName }) => {
+whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
   const trimmed = (body || '').trim();
 
   // ── Feature 5: Query commands ────────────────────────────────────────────────
@@ -874,7 +875,10 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
   {
     const cfg = getConfig();
     if (cfg.taskDetectionEnabled && groupName && trimmed.length >= 6) {
-      if (mightBeTask(trimmed)) {
+      const admins = cfg.taskDetectionAdmins || [];
+      const senderAllowed = admins.length === 0 ||
+        (senderPhone && admins.some(a => a.replace(/\D/g,'') === senderPhone.replace(/\D/g,'')));
+      if (senderAllowed && mightBeTask(trimmed)) {
         (async () => {
           try {
             const result = await classifyTask(trimmed, groupName);

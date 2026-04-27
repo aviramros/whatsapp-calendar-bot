@@ -1100,41 +1100,55 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
       זיהוי משימות חכם
     </div>
-    <div class="settings-row" style="margin-bottom:12px">
-      <div>
-        <div style="font-size:.88rem;font-weight:600">זיהוי אוטומטי של משימות בקבוצות</div>
-        <div style="font-size:.78rem;color:var(--muted);margin-top:3px">הבוט מזהה הודעות עם משימות ושולח עדכון מסודר לקבוצה</div>
-      </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <label class="toggle-switch">
         <input type="checkbox" id="task-detection-toggle" onchange="onTaskDetectionToggle()">
         <span class="toggle-slider"></span>
       </label>
+      <div style="text-align:right">
+        <div style="font-size:.88rem;font-weight:600">זיהוי אוטומטי של משימות בקבוצות</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:2px">הבוט מזהה הודעות עם משימות ושולח עדכון מסודר לקבוצה</div>
+      </div>
     </div>
 
-    <div id="task-detection-settings" style="display:none;border-top:1px solid var(--border);padding-top:14px;display:none">
-      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
-        <div class="settings-group" style="max-width:160px">
+    <div id="task-detection-settings" style="display:none;border-top:1px solid var(--border);padding-top:14px">
+
+      <!-- Authorized senders -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:.84rem;font-weight:600;margin-bottom:6px">מנהלי עבודה מורשים</div>
+        <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px">רק הודעות מהמספרים האלה יעברו לזיהוי AI. אם הרשימה ריקה — כל שולח מוכר.</div>
+        <div id="task-admins-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div class="add-group-row" style="max-width:280px">
+          <input type="text" id="task-admin-input" placeholder="972501234567" dir="ltr"
+            style="flex:1;font-size:.84rem"
+            onkeydown="if(event.key==='Enter')addTaskAdmin()">
+          <button class="btn btn-teal" style="font-size:.82rem;padding:5px 12px" onclick="addTaskAdmin()">הוסף</button>
+        </div>
+      </div>
+
+      <!-- Sliders -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--border);padding-top:14px">
+        <div class="settings-group" style="max-width:180px">
           <label>עיכוב לפני שליחה</label>
           <div style="display:flex;align-items:center;gap:8px">
             <input type="range" id="task-detection-delay" min="1" max="60" step="1" value="5"
               oninput="document.getElementById('task-delay-val').textContent=this.value"
               onchange="markSettingsDirty()"
               style="flex:1;accent-color:var(--teal)">
-            <span id="task-delay-val" style="font-size:.84rem;font-weight:600;color:var(--teal);min-width:30px">5</span>
+            <span id="task-delay-val" style="font-size:.84rem;font-weight:600;color:var(--teal);min-width:28px">5</span>
             <span style="font-size:.8rem;color:var(--muted)">דק׳</span>
           </div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:3px">זמן המתנה אחרי הזיהוי לפני שליחת הסיכום</div>
         </div>
-        <div class="settings-group" style="max-width:160px">
+        <div class="settings-group" style="max-width:180px">
           <label>סף ביטחון מינימלי</label>
           <div style="display:flex;align-items:center;gap:8px">
             <input type="range" id="task-detection-confidence" min="50" max="95" step="5" value="75"
               oninput="document.getElementById('task-conf-val').textContent=this.value+'%'"
               onchange="markSettingsDirty()"
               style="flex:1;accent-color:var(--teal)">
-            <span id="task-conf-val" style="font-size:.84rem;font-weight:600;color:var(--teal);min-width:38px">75%</span>
+            <span id="task-conf-val" style="font-size:.84rem;font-weight:600;color:var(--teal);min-width:36px">75%</span>
           </div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:3px">כמה בטוח ה-AI צריך להיות כדי לשלוח</div>
         </div>
       </div>
     </div>
@@ -1897,6 +1911,37 @@ function onTaskDetectionToggle(forceValue) {
   const enabled = forceValue !== undefined ? forceValue : document.getElementById('task-detection-toggle').checked;
   const settings = document.getElementById('task-detection-settings');
   if (settings) settings.style.display = enabled ? 'block' : 'none';
+  markSettingsDirty();
+}
+
+// ── Task Detection — authorized admins ────────────────────────────────────────
+let taskAdmins = [];
+
+function renderTaskAdmins() {
+  const container = document.getElementById('task-admins-list');
+  if (!container) return;
+  if (!taskAdmins.length) {
+    container.innerHTML = '<span style="font-size:.76rem;color:var(--muted);font-style:italic">ריקה — כל שולח מהקבוצות המוגדרות</span>';
+    return;
+  }
+  container.innerHTML = taskAdmins.map(phone => `
+    <span style="display:inline-flex;align-items:center;gap:5px;background:var(--teal-light);color:var(--teal);border-radius:20px;padding:3px 10px;font-size:.8rem;font-weight:600;direction:ltr">
+      ${phone}
+      <button onclick="removeTaskAdmin('${phone}')" style="background:none;border:none;cursor:pointer;color:var(--teal);font-size:.9rem;padding:0;line-height:1">&times;</button>
+    </span>`).join('');
+}
+
+function addTaskAdmin() {
+  const input = document.getElementById('task-admin-input');
+  const phone = input.value.replace(/\D/g, '').replace(/^0/, '972');
+  if (!phone || phone.length < 9) { toast('מספר לא תקין', 'error'); return; }
+  if (!taskAdmins.includes(phone)) { taskAdmins.push(phone); renderTaskAdmins(); markSettingsDirty(); }
+  input.value = '';
+}
+
+function removeTaskAdmin(phone) {
+  taskAdmins = taskAdmins.filter(p => p !== phone);
+  renderTaskAdmins();
   markSettingsDirty();
 }
 
@@ -2697,6 +2742,8 @@ async function loadSettings() {
     const confPct = Math.round((cfg.taskDetectionMinConfidence ?? 0.75) * 100);
     document.getElementById('task-detection-confidence').value = confPct;
     document.getElementById('task-conf-val').textContent = confPct + '%';
+    taskAdmins = cfg.taskDetectionAdmins || [];
+    renderTaskAdmins();
   } catch {}
 }
 
@@ -2722,6 +2769,7 @@ async function saveSettings() {
     taskDetectionEnabled:       document.getElementById('task-detection-toggle').checked,
     taskDetectionDelay:         parseInt(document.getElementById('task-detection-delay').value, 10),
     taskDetectionMinConfidence: parseInt(document.getElementById('task-detection-confidence').value, 10) / 100,
+    taskDetectionAdmins:        taskAdmins,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
