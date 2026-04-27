@@ -938,7 +938,7 @@
       </span>
       <div style="display:flex;gap:6px">
         <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" id="wa-groups-toggle-btn" onclick="toggleGroupsView()">הצג הכל</button>
-        <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" onclick="fetchWAGroups()">רענן</button>
+        <button class="btn btn-gray" style="font-size:.78rem;padding:4px 10px" onclick="fetchWAGroups(true)">רענן</button>
       </div>
     </div>
     <p style="font-size:.83rem;color:var(--muted);margin-bottom:10px">סמן את הקבוצות שהבוט יעקוב אחריהן להוספת אירועים לגוגל קלנדר</p>
@@ -1837,9 +1837,10 @@ let settingsGroups = [];
 let waGroupsList = []; // WhatsApp groups fetched from server
 let showAllGroups = false; // groups show/hide state
 
-async function fetchWAGroups() {
+async function fetchWAGroups(rebuild = false) {
   try {
-    const { groups } = await fetch(`${API_BASE}/whatsapp/groups`).then(r => r.json());
+    const url = `${API_BASE}/whatsapp/groups` + (rebuild ? '?rebuild=true' : '');
+    const { groups } = await fetch(url).then(r => r.json());
     // groups is [{name, id, label}] — normalize for backward compat with plain strings
     waGroupsList = (groups || []).map(g => typeof g === 'string' ? { name: g, id: g, label: g } : g);
   } catch { waGroupsList = []; }
@@ -1913,6 +1914,10 @@ function onTaskDetectionToggle(forceValue) {
   if (settings) settings.style.display = enabled ? 'block' : 'none';
   markSettingsDirty();
 }
+
+// No-op stub — the settings save bar is always visible while on the settings tab.
+// Defined here so any call to markSettingsDirty() doesn't throw a ReferenceError.
+function markSettingsDirty() {}
 
 // ── Task Detection — authorized admins ────────────────────────────────────────
 let taskAdmins = [];

@@ -201,8 +201,9 @@ export function startWhatsApp() {
 
 /**
  * Build a cache of { groupName → chatId } using getChats() once on startup.
+ * Exported so the server can trigger a manual rebuild (e.g. refresh button in UI).
  */
-async function buildGroupCache() {
+export async function buildGroupCache() {
   try {
     log('Building group cache (one-time)...');
     const chats = await Promise.race([

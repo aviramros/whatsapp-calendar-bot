@@ -31,7 +31,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import QRCode from 'qrcode';
 
-import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory } from './whatsapp.js';
+import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory, buildGroupCache } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
 import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview } from './config.js';
@@ -536,7 +536,12 @@ app.get('/status', (req, res) => {
 });
 
 // ── Bot On/Off ─────────────────────────────────────────────────────────────────
-app.get('/whatsapp/groups', (req, res) => {
+app.get('/whatsapp/groups', async (req, res) => {
+  // ?rebuild=true forces a fresh getChats() scan before returning
+  if (req.query.rebuild === 'true') {
+    console.log('[Server] /whatsapp/groups?rebuild=true — rebuilding group cache...');
+    await buildGroupCache().catch(e => console.log('[Server] Rebuild error: ' + e.message));
+  }
   // Returns detailed list [{name, id, label}] — duplicate names get a short ID suffix in label
   const detail = getGroupsWithDetails();
   res.json({ groups: detail.length ? detail : getAvailableGroups().map(n => ({ name: n, id: n, label: n })) });
