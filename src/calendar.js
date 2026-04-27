@@ -89,9 +89,10 @@ export async function createAllDayEvent(auth, calendarId, title, dateISO) {
     maxResults: 100,
   });
 
+  const normTitle = title.replace(/\s+/g, ' ').trim();
   const duplicate = (existing.data.items || []).some(ev => {
     const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
-    return evDate === dateISO && (ev.summary || '').trim() === title.trim();
+    return evDate === dateISO && (ev.summary || '').replace(/\s+/g, ' ').trim() === normTitle;
   });
   if (duplicate) return false;
 
@@ -126,10 +127,11 @@ export async function deleteAllDayEvent(auth, calendarId, title, dateISO) {
     maxResults:    100,
   });
 
+  const normTitle = title.replace(/\s+/g, ' ').trim();
   let deleted = 0;
   for (const ev of existing.data.items || []) {
     const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
-    if (evDate === dateISO && (ev.summary || '').trim() === title.trim()) {
+    if (evDate === dateISO && (ev.summary || '').replace(/\s+/g, ' ').trim() === normTitle) {
       await calendar.events.delete({ calendarId, eventId: ev.id });
       deleted++;
     }
@@ -152,6 +154,10 @@ export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
   const cal = google.calendar({ version: 'v3', auth });
   const results = { deleted: 0, created: 0, skipped: 0, errors: [] };
 
+  // Normalize title: collapse all internal whitespace to a single space.
+  // This handles cases where Excel / manual edits introduce extra/missing spaces.
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+
   // Group mapped tasks by calendarId
   const byCalId = {};
   for (const task of tasks) {
@@ -162,9 +168,9 @@ export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
     byCalId[calId].push(task);
   }
 
-  const now      = new Date();
-  const timeMin  = new Date(now.getTime() - 60 * 86400000).toISOString();
-  const timeMax  = new Date(now.getTime() + 90 * 86400000).toISOString();
+  const now     = new Date();
+  const timeMin = new Date(now.getTime() - 60 * 86400000).toISOString();
+  const timeMax = new Date(now.getTime() + 90 * 86400000).toISOString();
 
   for (const [calId, calTasks] of Object.entries(byCalId)) {
     // Fetch all events for this calendar in the window
@@ -183,19 +189,19 @@ export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
       continue;
     }
 
-    // Build { title -> Set<correctDates> } from plan tasks in this calendar
+    // Build { normTitle -> Set<correctDates> } — keyed by NORMALIZED title
     const titleToDates = {};
     for (const t of calTasks) {
-      const key = t.taskText.trim();
+      const key = norm(t.taskText);
       if (!titleToDates[key]) titleToDates[key] = new Set();
       titleToDates[key].add(t.dateISO);
     }
     const planTitles = new Set(Object.keys(titleToDates));
 
-    // Delete stale events: title in plan but date wrong
+    // Delete stale events: normalized title matches a plan task but date is wrong
     for (const ev of allEvents) {
-      const evTitle = (ev.summary || '').trim();
-      if (!planTitles.has(evTitle)) continue; // not a plan event — leave alone
+      const evTitle = norm(ev.summary);
+      if (!planTitles.has(evTitle)) continue; // not related to any plan task — leave alone
       const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
       if (!titleToDates[evTitle].has(evDate)) {
         // Stale — on wrong date
@@ -208,13 +214,13 @@ export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
       }
     }
 
-    // Ensure each plan task's event exists on the correct date (create if missing)
+    // Ensure each plan task has an event on its correct date
     for (const task of calTasks) {
-      const title = task.taskText.trim();
-      const date  = task.dateISO;
+      const nTitle = norm(task.taskText);
+      const date   = task.dateISO;
       const exists = allEvents.some(ev => {
         const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
-        return (ev.summary || '').trim() === title && evDate === date;
+        return norm(ev.summary) === nTitle && evDate === date;
       });
       if (exists) {
         results.skipped++;
@@ -222,11 +228,11 @@ export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
         try {
           await cal.events.insert({
             calendarId:  calId,
-            requestBody: { summary: title, start: { date }, end: { date } },
+            requestBody: { summary: task.taskText.trim(), start: { date }, end: { date } },
           });
           results.created++;
         } catch (e) {
-          results.errors.push(`create ${title}@${date}: ${e.message}`);
+          results.errors.push(`create ${nTitle}@${date}: ${e.message}`);
         }
       }
     }
