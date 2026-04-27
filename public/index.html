@@ -2852,21 +2852,26 @@ const CARD_LABELS = {
   'excel-preview':  'תצוגה מקדימה',
 };
 
+// Returns only the real page cards — excludes any [data-card-id] inside the layout dropdown
+function _tabCards(tab) {
+  return [...tab.querySelectorAll('[data-card-id]')].filter(el => !el.closest('.layout-dropdown'));
+}
+
 function applyCardLayout(tabName) {
   const tab = document.getElementById('tab-' + tabName);
   if (!tab) return;
   const layout = cardLayouts[tabName] || {};
   const hidden = layout.hidden || [];
   const order  = layout.order  || [];
-  tab.querySelectorAll('[data-card-id]').forEach(card => {
+  _tabCards(tab).forEach(card => {
     card.dataset.hidden = hidden.includes(card.dataset.cardId) ? 'true' : 'false';
   });
   if (order.length > 0) {
-    const cards = [...tab.querySelectorAll('[data-card-id]')];
-    cards.sort((a, b) => {
-      const ai = order.indexOf(a.dataset.cardId), bi = order.indexOf(b.dataset.cardId);
-      if (ai < 0 && bi < 0) return 0; if (ai < 0) return 1; if (bi < 0) return -1; return ai - bi;
-    }).forEach(c => tab.appendChild(c));
+    _tabCards(tab)
+      .sort((a, b) => {
+        const ai = order.indexOf(a.dataset.cardId), bi = order.indexOf(b.dataset.cardId);
+        if (ai < 0 && bi < 0) return 0; if (ai < 0) return 1; if (bi < 0) return -1; return ai - bi;
+      }).forEach(c => tab.appendChild(c));
   }
 }
 
@@ -2882,7 +2887,7 @@ function openLayoutDropdown(tabName) {
   const dd  = document.getElementById('layout-dd-' + tabName);
   if (!dd || !tab) return;
 
-  const cards = [...tab.querySelectorAll('[data-card-id]')];
+  const cards = _tabCards(tab);
   let ddDragSrc = null;
 
   const ul = document.createElement('ul');
@@ -2966,7 +2971,7 @@ function saveLayoutFromDropdown(tabName) {
   });
 
   // Apply visibility
-  tab.querySelectorAll('[data-card-id]').forEach(card => {
+  _tabCards(tab).forEach(card => {
     card.dataset.hidden = hidden.includes(card.dataset.cardId) ? 'true' : 'false';
   });
 
