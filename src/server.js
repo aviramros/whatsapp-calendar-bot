@@ -43,6 +43,7 @@ import {
   resolveCalendarIds,
   getOrCreateCalendar,
   createAllDayEvent,
+  deleteAllDayEvent,
   fetchUpcomingEvents,
   fetchWeekEvents,
 } from './calendar.js';
@@ -735,6 +736,27 @@ app.get('/calendar-events', async (req, res) => {
     res.json({ events });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a specific calendar event by title + date + group (used when editing a task's date)
+app.post('/calendar/delete-event', async (req, res) => {
+  const { title, dateISO, groupName } = req.body;
+  if (!title || !dateISO || !groupName)
+    return res.status(400).json({ ok: false, error: 'title, dateISO, groupName required' });
+  if (!isGoogleAuthenticated())
+    return res.json({ ok: false, error: 'Google not authenticated' });
+  try {
+    const auth        = await getAuthenticatedClient();
+    const calendarIds = await resolveCalendarIds(auth);
+    const calId       = calendarIds[groupName];
+    if (!calId) return res.json({ ok: false, error: `No calendar mapping for "${groupName}"` });
+    const deleted = await deleteAllDayEvent(auth, calId, title, dateISO);
+    log(`[Calendar] Deleted ${deleted} event(s): "${title}" on ${dateISO} (${groupName})`);
+    res.json({ ok: true, deleted });
+  } catch (err) {
+    log(`[Calendar] Delete error: ${err.message}`);
+    res.json({ ok: false, error: err.message });
   }
 });
 

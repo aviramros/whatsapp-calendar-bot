@@ -2431,26 +2431,27 @@ async function saveTaskFromModal() {
   const fingerprint = `${group}|${text}|${dateISO}`;
 
   const task = {
-    excelGroup:     group,
-    taskText:       text,
+    excelGroup:    group,
+    taskText:      text,
     dateISO,
     dateLabel,
-    whatsappGroup:  group,
+    whatsappGroup: group,
     fingerprint,
-    willSend:       true,
-    alreadySent:    false,
-    manuallyAdded:  true,
+    willSend:      true,
+    alreadySent:   false,
+    manuallyAdded: true,
   };
 
   const isNew = _teIdx === -1;
+  let oldTask  = null; // snapshot of original task before edit (used for calendar cleanup)
+
   if (isNew) {
     excelParsedTasks.push(task);
   } else {
-    const old = excelParsedTasks[_teIdx];
-    // Preserve alreadySent from original; reset if fingerprint changed (different date/text/group)
-    const sameFingerprint = old.fingerprint === fingerprint;
+    oldTask = { ...excelParsedTasks[_teIdx] };
+    const sameFingerprint = oldTask.fingerprint === fingerprint;
     excelParsedTasks[_teIdx] = {
-      ...old,
+      ...oldTask,
       excelGroup:    group,
       taskText:      text,
       dateISO,
@@ -2458,7 +2459,7 @@ async function saveTaskFromModal() {
       whatsappGroup: group,
       fingerprint,
       willSend:      true,
-      alreadySent:   sameFingerprint ? old.alreadySent : false,
+      alreadySent:   sameFingerprint ? oldTask.alreadySent : false,
       manuallyAdded: true,
     };
   }
@@ -2471,6 +2472,22 @@ async function saveTaskFromModal() {
   renderExcelPreview(excelParsedTasks);
 
   if (syncCal) {
+    // When editing a task, delete the OLD calendar event first (if date/text/group changed)
+    // so we don't leave a stale entry on the old date.
+    if (!isNew && oldTask && oldTask.fingerprint !== fingerprint) {
+      try {
+        await fetch(`${API_BASE}/calendar/delete-event`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            title:     oldTask.taskText,
+            dateISO:   oldTask.dateISO,
+            groupName: oldTask.whatsappGroup || oldTask.excelGroup,
+          }),
+        });
+      } catch {}
+    }
+    // Create the new calendar event
     try {
       const res  = await fetch(`${API_BASE}/excel/dispatch`, {
         method:  'POST',
@@ -2478,9 +2495,9 @@ async function saveTaskFromModal() {
         body:    JSON.stringify({ tasks: [task], calendarOnly: true }),
       });
       const data = await res.json();
-      if (data.created.length)       toast(`✅ ${isNew ? 'נוספה' : 'עודכנה'} ונוסף ליומן`, 'success');
-      else if (data.errors.length)   toast(`נשמר — שגיאת יומן: ${data.errors[0]}`, 'warning');
-      else                           toast(isNew ? '✅ משימה נוספה (כבר קיים ביומן)' : '✅ משימה עודכנה (כבר קיים ביומן)', 'success');
+      if (data.created.length)     toast(`✅ ${isNew ? 'נוספה' : 'עודכנה'} ונוסף ליומן`, 'success');
+      else if (data.errors.length) toast(`נשמר — שגיאת יומן: ${data.errors[0]}`, 'warning');
+      else                         toast(isNew ? '✅ משימה נוספה (כבר קיים ביומן)' : '✅ משימה עודכנה (כבר קיים ביומן)', 'success');
     } catch {
       toast(isNew ? '✅ נוספה — לא הצלחנו לסנכרן יומן' : '✅ עודכנה — לא הצלחנו לסנכרן יומן', 'warning');
     }

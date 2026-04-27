@@ -107,6 +107,37 @@ export async function createAllDayEvent(auth, calendarId, title, dateISO) {
 }
 
 /**
+ * Deletes all all-day events matching the given title and date from a calendar.
+ * Returns the number of events deleted.
+ */
+export async function deleteAllDayEvent(auth, calendarId, title, dateISO) {
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  // Query a 3-day window (same as createAllDayEvent) to catch timezone-shifted all-day events
+  const d = new Date(dateISO + 'T12:00:00Z');
+  const dayBefore = new Date(d); dayBefore.setDate(d.getDate() - 1);
+  const dayAfter  = new Date(d); dayAfter.setDate(d.getDate() + 2);
+
+  const existing = await calendar.events.list({
+    calendarId,
+    timeMin:       dayBefore.toISOString(),
+    timeMax:       dayAfter.toISOString(),
+    singleEvents:  true,
+    maxResults:    100,
+  });
+
+  let deleted = 0;
+  for (const ev of existing.data.items || []) {
+    const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
+    if (evDate === dateISO && (ev.summary || '').trim() === title.trim()) {
+      await calendar.events.delete({ calendarId, eventId: ev.id });
+      deleted++;
+    }
+  }
+  return deleted;
+}
+
+/**
  * Fetches upcoming all-day events for the given calendar names within the next `days` days.
  * Returns a flat array of { title, date, calendar } objects.
  */
