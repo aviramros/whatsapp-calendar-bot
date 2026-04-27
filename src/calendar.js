@@ -138,6 +138,104 @@ export async function deleteAllDayEvent(auth, calendarId, title, dateISO) {
 }
 
 /**
+ * Force-reconcile Google Calendar against the given plan tasks.
+ *
+ * For each calendar (grouped by whatsappGroup):
+ *  1. Fetch all events in a ±60-day window.
+ *  2. For any event whose title matches a plan task title but sits on a
+ *     date NOT listed in the plan for that title → delete it (stale event).
+ *  3. For each plan task, if no event exists on the correct date → create it.
+ *
+ * Returns { deleted, created, skipped, errors }.
+ */
+export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
+  const cal = google.calendar({ version: 'v3', auth });
+  const results = { deleted: 0, created: 0, skipped: 0, errors: [] };
+
+  // Group mapped tasks by calendarId
+  const byCalId = {};
+  for (const task of tasks) {
+    if (!task.willSend || !task.whatsappGroup) continue;
+    const calId = calendarIdMap[task.whatsappGroup];
+    if (!calId) continue;
+    if (!byCalId[calId]) byCalId[calId] = [];
+    byCalId[calId].push(task);
+  }
+
+  const now      = new Date();
+  const timeMin  = new Date(now.getTime() - 60 * 86400000).toISOString();
+  const timeMax  = new Date(now.getTime() + 90 * 86400000).toISOString();
+
+  for (const [calId, calTasks] of Object.entries(byCalId)) {
+    // Fetch all events for this calendar in the window
+    let allEvents = [];
+    try {
+      const resp = await cal.events.list({
+        calendarId:   calId,
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        maxResults:   500,
+      });
+      allEvents = resp.data.items || [];
+    } catch (err) {
+      results.errors.push(`list events: ${err.message}`);
+      continue;
+    }
+
+    // Build { title -> Set<correctDates> } from plan tasks in this calendar
+    const titleToDates = {};
+    for (const t of calTasks) {
+      const key = t.taskText.trim();
+      if (!titleToDates[key]) titleToDates[key] = new Set();
+      titleToDates[key].add(t.dateISO);
+    }
+    const planTitles = new Set(Object.keys(titleToDates));
+
+    // Delete stale events: title in plan but date wrong
+    for (const ev of allEvents) {
+      const evTitle = (ev.summary || '').trim();
+      if (!planTitles.has(evTitle)) continue; // not a plan event — leave alone
+      const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
+      if (!titleToDates[evTitle].has(evDate)) {
+        // Stale — on wrong date
+        try {
+          await cal.events.delete({ calendarId: calId, eventId: ev.id });
+          results.deleted++;
+        } catch (e) {
+          results.errors.push(`delete ${evTitle}@${evDate}: ${e.message}`);
+        }
+      }
+    }
+
+    // Ensure each plan task's event exists on the correct date (create if missing)
+    for (const task of calTasks) {
+      const title = task.taskText.trim();
+      const date  = task.dateISO;
+      const exists = allEvents.some(ev => {
+        const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
+        return (ev.summary || '').trim() === title && evDate === date;
+      });
+      if (exists) {
+        results.skipped++;
+      } else {
+        try {
+          await cal.events.insert({
+            calendarId:  calId,
+            requestBody: { summary: title, start: { date }, end: { date } },
+          });
+          results.created++;
+        } catch (e) {
+          results.errors.push(`create ${title}@${date}: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
  * Fetches upcoming all-day events for the given calendar names within the next `days` days.
  * Returns a flat array of { title, date, calendar } objects.
  */

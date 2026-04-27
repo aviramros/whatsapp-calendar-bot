@@ -44,6 +44,7 @@ import {
   getOrCreateCalendar,
   createAllDayEvent,
   deleteAllDayEvent,
+  forceResyncCalendar,
   fetchUpcomingEvents,
   fetchWeekEvents,
 } from './calendar.js';
@@ -736,6 +737,25 @@ app.get('/calendar-events', async (req, res) => {
     res.json({ events });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Force-reconcile calendar against the saved plan: delete stale events, create missing ones.
+app.post('/calendar/force-resync', async (req, res) => {
+  if (!isGoogleAuthenticated())
+    return res.json({ ok: false, error: 'Google not authenticated' });
+  const plan = getWeeklyPlan();
+  const tasks = (plan?.tasks || []).filter(t => t.willSend && t.whatsappGroup);
+  if (!tasks.length) return res.json({ ok: false, error: 'תכנית שבועית ריקה' });
+  try {
+    const auth        = await getAuthenticatedClient();
+    const calendarIds = await resolveCalendarIds(auth);
+    const results     = await forceResyncCalendar(auth, calendarIds, tasks);
+    log(`[Calendar] Force-resync: deleted=${results.deleted} created=${results.created} skipped=${results.skipped} errors=${results.errors.length}`);
+    res.json({ ok: true, ...results });
+  } catch (err) {
+    log(`[Calendar] Force-resync error: ${err.message}`);
+    res.json({ ok: false, error: err.message });
   }
 });
 
