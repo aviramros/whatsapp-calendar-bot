@@ -245,7 +245,8 @@ export async function fetchRecentMessages(hours) {
       const recent = messages.filter(m => m.timestamp * 1000 >= cutoff);
       log(`Group "${groupName}": fetched ${messages.length} messages, ${recent.length} within ${hours}h`);
       for (const msg of recent) {
-        results.push({ body: msg.body, groupName, timestamp: msg.timestamp });
+        const senderPhone = (msg.author || msg.from || '').split('@')[0].replace(/\D/g, '');
+        results.push({ body: msg.body, groupName, timestamp: msg.timestamp, senderPhone });
       }
     } catch (err) {
       log(`Group "${groupName}" skipped: ${err.message}`);

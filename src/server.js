@@ -571,6 +571,38 @@ app.post('/trigger', async (req, res) => {
   }
 });
 
+// Retrospective task detection — runs recent messages through the AI detection pipeline
+app.post('/trigger/task-detection', async (req, res) => {
+  const hours = Math.min(Number(req.query.hours) || 1, 24);
+  const cfg = getConfig();
+  if (!cfg.taskDetectionEnabled) return res.json({ ok: false, error: 'Task detection is disabled' });
+  try {
+    log(`[TaskDetection] Manual backfill: fetching last ${hours}h of messages...`);
+    const messages = await fetchRecentMessages(hours);
+    log(`[TaskDetection] Backfill: ${messages.length} messages fetched`);
+    const results = [];
+    for (const { body, groupName, senderPhone } of messages) {
+      const trimmed = (body || '').trim();
+      const admins = cfg.taskDetectionAdmins || [];
+      const senderAllowed = admins.length === 0 ||
+        (senderPhone && admins.some(a => a.replace(/\D/g,'') === senderPhone.replace(/\D/g,'')));
+      if (!senderAllowed) { results.push({ body: trimmed.slice(0,60), groupName, senderPhone, result: 'sender_blocked' }); continue; }
+      if (!mightBeTask(trimmed)) { results.push({ body: trimmed.slice(0,60), groupName, senderPhone, result: 'pre_filter_failed' }); continue; }
+      const classification = await classifyTask(trimmed, groupName);
+      results.push({ body: trimmed.slice(0,60), groupName, senderPhone, result: classification.isTask ? 'task_detected' : 'not_a_task', confidence: classification.confidence, description: classification.description, date: classification.date });
+      if (classification.isTask && classification.confidence >= (cfg.taskDetectionMinConfidence ?? 0.75)) {
+        log(`[TaskDetection] Backfill: task detected in "${groupName}": ${classification.description}`);
+        // emit through normal pipeline (with 0 delay for backfill)
+        whatsappEvents.emit('message', { body, groupName, senderPhone });
+      }
+    }
+    res.json({ ok: true, hours, total: messages.length, results });
+  } catch (err) {
+    log(`[TaskDetection] Backfill error: ${err.message}`);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/test-message', async (req, res) => {
   const { summaryRecipient } = getConfig();
   if (!summaryRecipient) return res.json({ ok: false, error: 'No summary recipient configured' });
