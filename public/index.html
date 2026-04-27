@@ -1829,14 +1829,15 @@ function renderWeek() {
     const events = evMap[dateISO] || [];
     const col = document.createElement('div');
     col.className = 'week-col' + (isToday ? ' today' : '');
+    // Build event HTML — store data in attributes (safe for any title chars)
     const evHtml = events.length
       ? events.map(ev => {
           const c = calColor(ev.calendar);
-          const titleAttr = esc(ev.title).replace(/'/g, '&#39;');
-          const dateAttr  = esc(dateISO);
-          const groupAttr = esc(ev.calendar).replace(/'/g, '&#39;');
-          return `<div class="week-event" style="background:${c.bg};color:${c.fg};position:relative">
-            <span class="cal-ev-del" onclick="deleteCalendarEvent(event,'${titleAttr}','${dateAttr}','${groupAttr}')" title="מחק אירוע" style="position:absolute;top:2px;left:4px;font-size:.75rem;line-height:1;cursor:pointer;opacity:.5;display:none" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">✕</span>
+          // escAttr: encodes " so data-* attributes stay valid regardless of title content
+          const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          return `<div class="week-event" style="background:${c.bg};color:${c.fg};position:relative"
+              data-ev-title="${escAttr(ev.title)}" data-ev-date="${dateISO}" data-ev-group="${escAttr(ev.calendar)}">
+            <span class="cal-ev-del" title="מחק אירוע" style="position:absolute;top:2px;left:4px;font-size:.8rem;line-height:1;cursor:pointer;display:none;padding:2px 3px">✕</span>
             ${esc(ev.title)}<div style="font-size:.68rem;opacity:.7;margin-top:2px">${esc(ev.calendar)}</div>
           </div>`;
         }).join('')
@@ -1847,10 +1848,17 @@ function renderWeek() {
         <div class="wdate">${d.getDate()}</div>
       </div>
       <div class="week-col-body">${evHtml}</div>`;
-    // Show ✕ on hover over each event
+    // Attach hover + click listeners after innerHTML is set (avoids inline-attr quoting issues)
     col.querySelectorAll('.week-event').forEach(el => {
-      el.addEventListener('mouseenter', () => { const x = el.querySelector('.cal-ev-del'); if(x) x.style.display=''; });
-      el.addEventListener('mouseleave', () => { const x = el.querySelector('.cal-ev-del'); if(x) x.style.display='none'; });
+      const btn = el.querySelector('.cal-ev-del');
+      el.addEventListener('mouseenter', () => { if (btn) btn.style.display = ''; });
+      el.addEventListener('mouseleave', () => { if (btn) btn.style.display = 'none'; });
+      if (btn) {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          deleteCalendarEvent(e, el.dataset.evTitle, el.dataset.evDate, el.dataset.evGroup);
+        });
+      }
     });
     grid.appendChild(col);
   }
@@ -2552,8 +2560,7 @@ function closeCalDropdown() {
   document.getElementById('cal-dd-confirm').style.display = 'none';
 }
 async function deleteCalendarEvent(e, title, dateISO, groupName) {
-  e.stopPropagation(); // don't navigate to day view
-  if (!confirm(`למחוק את האירוע:\n"${title}"\n${dateISO} (${groupName})?`)) return;
+  e.stopPropagation();
   try {
     const res  = await fetch(`${API_BASE}/calendar/delete-event`, {
       method:  'POST',
