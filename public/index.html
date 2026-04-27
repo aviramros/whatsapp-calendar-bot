@@ -1832,7 +1832,13 @@ function renderWeek() {
     const evHtml = events.length
       ? events.map(ev => {
           const c = calColor(ev.calendar);
-          return `<div class="week-event" style="background:${c.bg};color:${c.fg}">${esc(ev.title)}<div style="font-size:.68rem;opacity:.7;margin-top:2px">${esc(ev.calendar)}</div></div>`;
+          const titleAttr = esc(ev.title).replace(/'/g, '&#39;');
+          const dateAttr  = esc(dateISO);
+          const groupAttr = esc(ev.calendar).replace(/'/g, '&#39;');
+          return `<div class="week-event" style="background:${c.bg};color:${c.fg};position:relative">
+            <span class="cal-ev-del" onclick="deleteCalendarEvent(event,'${titleAttr}','${dateAttr}','${groupAttr}')" title="מחק אירוע" style="position:absolute;top:2px;left:4px;font-size:.75rem;line-height:1;cursor:pointer;opacity:.5;display:none" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">✕</span>
+            ${esc(ev.title)}<div style="font-size:.68rem;opacity:.7;margin-top:2px">${esc(ev.calendar)}</div>
+          </div>`;
         }).join('')
       : `<div class="week-empty">—</div>`;
     col.innerHTML = `
@@ -1841,6 +1847,11 @@ function renderWeek() {
         <div class="wdate">${d.getDate()}</div>
       </div>
       <div class="week-col-body">${evHtml}</div>`;
+    // Show ✕ on hover over each event
+    col.querySelectorAll('.week-event').forEach(el => {
+      el.addEventListener('mouseenter', () => { const x = el.querySelector('.cal-ev-del'); if(x) x.style.display=''; });
+      el.addEventListener('mouseleave', () => { const x = el.querySelector('.cal-ev-del'); if(x) x.style.display='none'; });
+    });
     col.addEventListener('click', () => { calYear = d.getFullYear(); calMonth = d.getMonth(); calDay = d.getDate(); setCalView('day'); });
     col.style.cursor = 'pointer';
     grid.appendChild(col);
@@ -2542,6 +2553,29 @@ function closeCalDropdown() {
   document.getElementById('cal-dd-options').style.display = 'block';
   document.getElementById('cal-dd-confirm').style.display = 'none';
 }
+async function deleteCalendarEvent(e, title, dateISO, groupName) {
+  e.stopPropagation(); // don't navigate to day view
+  if (!confirm(`למחוק את האירוע:\n"${title}"\n${dateISO} (${groupName})?`)) return;
+  try {
+    const res  = await fetch(`${API_BASE}/calendar/delete-event`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ title, dateISO, groupName }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Remove from local cache and re-render without hitting the API
+      calEventsCache = calEventsCache.filter(ev => !(ev.title === title && ev.date === dateISO && ev.calendar === groupName));
+      renderCalendar();
+      toast(`נמחק: "${title}"`, 'success');
+    } else {
+      toast(`שגיאה: ${data.error}`, 'error');
+    }
+  } catch (err) {
+    toast('שגיאת רשת: ' + err.message, 'error');
+  }
+}
+
 async function forceResyncCalendar(btn) {
   closeCalDropdown();
   const orig = btn.textContent;

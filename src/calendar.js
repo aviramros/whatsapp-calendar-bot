@@ -89,10 +89,11 @@ export async function createAllDayEvent(auth, calendarId, title, dateISO) {
     maxResults: 100,
   });
 
-  const normTitle = title.replace(/\s+/g, ' ').trim();
+  // Strip ALL whitespace for comparison — handles "200ודשן" vs "200 ודשן" etc.
+  const normTitle = title.replace(/\s/g, '').toLowerCase();
   const duplicate = (existing.data.items || []).some(ev => {
     const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
-    return evDate === dateISO && (ev.summary || '').replace(/\s+/g, ' ').trim() === normTitle;
+    return evDate === dateISO && (ev.summary || '').replace(/\s/g, '').toLowerCase() === normTitle;
   });
   if (duplicate) return false;
 
@@ -127,11 +128,11 @@ export async function deleteAllDayEvent(auth, calendarId, title, dateISO) {
     maxResults:    100,
   });
 
-  const normTitle = title.replace(/\s+/g, ' ').trim();
+  const normTitle = title.replace(/\s/g, '').toLowerCase();
   let deleted = 0;
   for (const ev of existing.data.items || []) {
     const evDate = ev.start?.date || ev.start?.dateTime?.slice(0, 10);
-    if (evDate === dateISO && (ev.summary || '').replace(/\s+/g, ' ').trim() === normTitle) {
+    if (evDate === dateISO && (ev.summary || '').replace(/\s/g, '').toLowerCase() === normTitle) {
       await calendar.events.delete({ calendarId, eventId: ev.id });
       deleted++;
     }
@@ -154,9 +155,8 @@ export async function forceResyncCalendar(auth, calendarIdMap, tasks) {
   const cal = google.calendar({ version: 'v3', auth });
   const results = { deleted: 0, created: 0, skipped: 0, errors: [] };
 
-  // Normalize title: collapse all internal whitespace to a single space.
-  // This handles cases where Excel / manual edits introduce extra/missing spaces.
-  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+  // Strip ALL whitespace for comparison — "200ודשן" and "200 ודשן" are treated as equal.
+  const norm = s => (s || '').replace(/\s/g, '').toLowerCase();
 
   // Group mapped tasks by calendarId
   const byCalId = {};
