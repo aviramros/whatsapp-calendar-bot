@@ -1094,6 +1094,52 @@
     </div>
   </div>
 
+  <!-- ── AI Task Detection ── -->
+  <div class="card card-wide" data-card-id="task-detection">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><circle cx="19" cy="5" r="3" fill="currentColor" stroke="none"/></svg>
+      זיהוי משימות חכם
+    </div>
+    <div class="settings-row" style="margin-bottom:12px">
+      <div>
+        <div style="font-size:.88rem;font-weight:600">זיהוי אוטומטי של משימות בקבוצות</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:3px">הבוט מזהה הודעות עם משימות ושולח עדכון מסודר לקבוצה</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="task-detection-toggle" onchange="onTaskDetectionToggle()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div id="task-detection-settings" style="display:none;border-top:1px solid var(--border);padding-top:14px;display:none">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+        <div class="settings-group" style="max-width:160px">
+          <label>עיכוב לפני שליחה</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="task-detection-delay" min="1" max="60" step="1" value="5"
+              oninput="document.getElementById('task-delay-val').textContent=this.value"
+              onchange="markSettingsDirty()"
+              style="flex:1;accent-color:var(--teal)">
+            <span id="task-delay-val" style="font-size:.84rem;font-weight:600;color:var(--teal);min-width:30px">5</span>
+            <span style="font-size:.8rem;color:var(--muted)">דק׳</span>
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:3px">זמן המתנה אחרי הזיהוי לפני שליחת הסיכום</div>
+        </div>
+        <div class="settings-group" style="max-width:160px">
+          <label>סף ביטחון מינימלי</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="task-detection-confidence" min="50" max="95" step="5" value="75"
+              oninput="document.getElementById('task-conf-val').textContent=this.value+'%'"
+              onchange="markSettingsDirty()"
+              style="flex:1;accent-color:var(--teal)">
+            <span id="task-conf-val" style="font-size:.84rem;font-weight:600;color:var(--teal);min-width:38px">75%</span>
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:3px">כמה בטוח ה-AI צריך להיות כדי לשלוח</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Logo ── -->
   <div class="card card-wide" data-card-id="logo">
     <div class="card-title">
@@ -1845,6 +1891,13 @@ function toggleWeeklyDispatch(enabled) {
 function toggleGroupReminders(enabled) {
   const settings = document.getElementById('group-reminders-settings');
   if (settings) settings.style.display = enabled ? 'block' : 'none';
+}
+
+function onTaskDetectionToggle(forceValue) {
+  const enabled = forceValue !== undefined ? forceValue : document.getElementById('task-detection-toggle').checked;
+  const settings = document.getElementById('task-detection-settings');
+  if (settings) settings.style.display = enabled ? 'block' : 'none';
+  markSettingsDirty();
 }
 
 async function loadAdminPhone() {
@@ -2635,6 +2688,15 @@ async function loadSettings() {
     const grm = String(cfg.groupRemindersMinute ?? 0).padStart(2,'0');
     document.getElementById('group-reminders-time').value = `${grh}:${grm}`;
     document.getElementById('pin-messages').checked = cfg.pinMessages ?? false;
+    // Task detection
+    const tdEnabled = cfg.taskDetectionEnabled ?? false;
+    document.getElementById('task-detection-toggle').checked = tdEnabled;
+    onTaskDetectionToggle(tdEnabled);
+    document.getElementById('task-detection-delay').value = cfg.taskDetectionDelay ?? 5;
+    document.getElementById('task-delay-val').textContent  = cfg.taskDetectionDelay ?? 5;
+    const confPct = Math.round((cfg.taskDetectionMinConfidence ?? 0.75) * 100);
+    document.getElementById('task-detection-confidence').value = confPct;
+    document.getElementById('task-conf-val').textContent = confPct + '%';
   } catch {}
 }
 
@@ -2657,6 +2719,9 @@ async function saveSettings() {
     groupRemindersHour:   parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[0], 10),
     groupRemindersMinute: parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[1], 10),
     pinMessages: document.getElementById('pin-messages').checked,
+    taskDetectionEnabled:       document.getElementById('task-detection-toggle').checked,
+    taskDetectionDelay:         parseInt(document.getElementById('task-detection-delay').value, 10),
+    taskDetectionMinConfidence: parseInt(document.getElementById('task-detection-confidence').value, 10) / 100,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -2850,6 +2915,7 @@ const CARD_LABELS = {
   'upload':         'העלאת תוכנית שבועית',
   'group-map':      'מיפוי קבוצות',
   'excel-preview':  'תצוגה מקדימה',
+  'task-detection': 'זיהוי משימות חכם',
 };
 
 // Returns only the real page cards — excludes any [data-card-id] inside the layout dropdown

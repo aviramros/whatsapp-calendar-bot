@@ -46,6 +46,7 @@ import {
   fetchUpcomingEvents,
   fetchWeekEvents,
 } from './calendar.js';
+import { mightBeTask, classifyTask, enqueuePendingTask, formatFollowUp } from './taskDetector.js';
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
          scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo,
          scheduleGroupReminders, stopGroupReminders } from './scheduler.js';
@@ -577,6 +578,10 @@ app.post('/config', (req, res) => {
     cardLayouts:    req.body.cardLayouts    !== undefined ? req.body.cardLayouts    : (current.cardLayouts    ?? {}),
     calendarColors: req.body.calendarColors !== undefined ? req.body.calendarColors : (current.calendarColors ?? {}),
     calendarMap:    req.body.calendarMap    !== undefined ? req.body.calendarMap    : (current.calendarMap    ?? {}),
+    // AI task detection
+    taskDetectionEnabled:       req.body.taskDetectionEnabled       !== undefined ? Boolean(req.body.taskDetectionEnabled)          : (current.taskDetectionEnabled       ?? false),
+    taskDetectionDelay:         req.body.taskDetectionDelay         !== undefined ? Number(req.body.taskDetectionDelay)             : (current.taskDetectionDelay         ?? 5),
+    taskDetectionMinConfidence: req.body.taskDetectionMinConfidence !== undefined ? Number(req.body.taskDetectionMinConfidence)      : (current.taskDetectionMinConfidence  ?? 0.75),
   };
   saveConfig(updated);
 
@@ -863,6 +868,36 @@ whatsappEvents.on('message', async ({ body, groupName }) => {
       }
     }
     return;
+  }
+
+  // ── AI Task Detection ────────────────────────────────────────────────────────
+  {
+    const cfg = getConfig();
+    if (cfg.taskDetectionEnabled && groupName && trimmed.length >= 6) {
+      if (mightBeTask(trimmed)) {
+        // Don't await — run in background so message handling isn't blocked
+        (async () => {
+          try {
+            const result = await classifyTask(trimmed, groupName);
+            if (result.isTask && result.confidence >= (cfg.taskDetectionMinConfidence ?? 0.75)) {
+              const delayMs = (cfg.taskDetectionDelay ?? 5) * 60 * 1000;
+              enqueuePendingTask(
+                groupName,
+                { description: result.description || trimmed, date: result.date, rawText: trimmed },
+                delayMs,
+                async (grp, tasks) => {
+                  const msg = formatFollowUp(grp, tasks);
+                  log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks)`);
+                  await sendWhatsAppMessage(grp, msg);
+                }
+              );
+            }
+          } catch (err) {
+            log(`[TaskDetection] Error: ${err.message}`);
+          }
+        })();
+      }
+    }
   }
 
   // ── Existing: Google Calendar real-time sync ─────────────────────────────────

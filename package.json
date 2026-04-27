@@ -8,6 +8,7 @@
     "setup-auth": "node src/calendar.js --auth"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
