@@ -196,6 +196,46 @@
     .btn-green { background: var(--teal); color: #fff; }
     .btn-green:hover:not(:disabled) { background: var(--teal-dark); }
 
+    /* ── Split Button ── */
+    .split-btn-wrap { position: relative; flex: 1; }
+    .split-btn { display: flex; border-radius: 10px; overflow: visible; }
+    .split-btn .split-main {
+      flex: 1; border-radius: 10px 0 0 10px !important;
+      border-inline-end: 1px solid rgba(0,0,0,.12) !important;
+      padding: 12px 6px; font-size: .88rem;
+    }
+    .split-btn .split-chevron {
+      padding: 0 11px; border-radius: 0 10px 10px 0 !important;
+      display: flex; align-items: center; justify-content: center;
+      min-width: 36px; font-size: .88rem;
+    }
+    .split-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.15); z-index: 200;
+      overflow: hidden; min-width: 160px;
+    }
+    .split-dropdown-item {
+      width: 100%; padding: 12px 16px; background: none; border: none;
+      text-align: right; cursor: pointer; font-size: .86rem; font-weight: 500;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .split-dropdown-item:hover { background: #f7f7f7; }
+    .split-dropdown-item.danger { color: #e53e3e; }
+    .split-dd-confirm { padding: 14px 16px; }
+    .split-dd-confirm .confirm-title { font-size: .86rem; font-weight: 600; margin-bottom: 12px; }
+    .split-dd-confirm .confirm-btns { display: flex; gap: 8px; justify-content: flex-end; }
+    .split-dd-confirm .confirm-btns button {
+      padding: 6px 16px; border-radius: 7px; border: none; cursor: pointer;
+      font-size: .83rem; font-weight: 600; transition: opacity .15s;
+    }
+    .split-dd-confirm .confirm-btns button:hover { opacity: .85; }
+    .split-dd-confirm .confirm-yes { background: #ef4444; color: #fff; }
+    .split-dd-confirm .confirm-no  { background: #f3f4f6; color: #374151; border: 1px solid var(--border) !important; }
+    body.dark .split-dropdown      { background: #1e2a3d; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
+    body.dark .split-dropdown-item:hover { background: #253347; }
+    body.dark .split-dd-confirm .confirm-no { background: #253347; color: var(--text); }
+
     #sync-btn { width: 100%; padding: 11px; font-size: .93rem; border-radius: 5px; }
 
     /* ── Result box ── */
@@ -1189,9 +1229,28 @@
     </div>
     <div style="margin-top:16px;display:flex;gap:8px;align-items:stretch">
       <button class="btn btn-teal" style="flex:1;padding:12px 6px;font-size:.88rem" id="dispatch-btn" onclick="dispatchExcel(false)">שלח עכשיו</button>
-      <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-        <button class="btn btn-gray" style="flex:1;padding:12px 6px;font-size:.88rem" id="dispatch-cal-btn" onclick="dispatchExcel(true)">טען ליומן</button>
-        <button onclick="resetCalendarState(this)" style="background:none;border:none;font-size:.72rem;color:var(--muted);cursor:pointer;padding:1px 0;text-align:center;white-space:nowrap" title="אחרי מחיקה מהיומן — מאפשר טעינה מחדש">אפס סטטוס יומן</button>
+      <div class="split-btn-wrap">
+        <div class="split-btn">
+          <button class="btn btn-gray split-main" id="dispatch-cal-btn" onclick="dispatchExcel(true)">טען ליומן</button>
+          <button class="btn btn-gray split-chevron" onclick="toggleCalDropdown(event)" aria-label="אפשרויות">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <div class="split-dropdown" id="cal-split-dropdown" style="display:none">
+          <div id="cal-dd-options">
+            <button class="split-dropdown-item danger" onclick="showCalResetConfirm()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+              אפס סטטוס יומן
+            </button>
+          </div>
+          <div id="cal-dd-confirm" class="split-dd-confirm" style="display:none">
+            <div class="confirm-title">האם אתה בטוח?</div>
+            <div class="confirm-btns">
+              <button class="confirm-no" onclick="closeCalDropdown()">לא</button>
+              <button class="confirm-yes" onclick="doResetCalendar()">כן</button>
+            </div>
+          </div>
+        </div>
       </div>
       <button class="btn btn-gray" style="flex:1;padding:12px 6px;font-size:.88rem;border-radius:10px;display:none" id="resend-all-btn" onclick="resendAll()">↩ שלח הכל שוב</button>
       <button class="btn btn-gray" style="flex:1;padding:12px 6px;font-size:.88rem" onclick="sendWeeklySummaryNow(this)">סיכום שבועי</button>
@@ -2122,26 +2181,45 @@ async function resendTask(index, btn) {
   }
 }
 
-async function resetCalendarState(btn) {
-  // Collect fingerprints of current tasks to reset only relevant entries
+// ── Split Button — Calendar ────────────────────────────────────────────────
+function toggleCalDropdown(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('cal-split-dropdown');
+  const isOpen = dd.style.display !== 'none';
+  closeCalDropdown();
+  if (!isOpen) dd.style.display = 'block';
+}
+function showCalResetConfirm() {
+  document.getElementById('cal-dd-options').style.display = 'none';
+  document.getElementById('cal-dd-confirm').style.display = 'block';
+}
+function closeCalDropdown() {
+  const dd = document.getElementById('cal-split-dropdown');
+  if (!dd) return;
+  dd.style.display = 'none';
+  document.getElementById('cal-dd-options').style.display = 'block';
+  document.getElementById('cal-dd-confirm').style.display = 'none';
+}
+async function doResetCalendar() {
+  closeCalDropdown();
   const fingerprints = excelParsedTasks.map(t => t.fingerprint).filter(Boolean);
   try {
-    btn.textContent = '⏳...';
     await fetch(`${API_BASE}/state/calendar`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fingerprints })
     });
-    // Mark all tasks as not-yet-sent in memory so the UI reflects the reset
     excelParsedTasks = excelParsedTasks.map(t => ({ ...t, alreadySent: false }));
     renderExcelPreview(excelParsedTasks);
-    toast('🔄 סטטוס היומן אופס — ניתן לטעון מחדש', 'success');
+    toast('סטטוס היומן אופס — ניתן לטעון מחדש', 'success');
   } catch (e) {
     toast('שגיאה: ' + e.message, 'error');
-  } finally {
-    btn.textContent = '🔄 אפס סטטוס יומן';
   }
 }
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.split-btn-wrap')) closeCalDropdown();
+});
 
 async function sendWeeklySummaryNow(btn) {
   btn.disabled = true;
@@ -2244,7 +2322,7 @@ async function dispatchExcel(calendarOnly = false) {
   } finally {
     btn.disabled = false; otherBtn.disabled = false;
     document.getElementById('dispatch-btn').textContent = 'שלח לכולם';
-    document.getElementById('dispatch-cal-btn').textContent = '📅 טען ליומן';
+    document.getElementById('dispatch-cal-btn').textContent = 'טען ליומן';
   }
 }
 
