@@ -1852,8 +1852,6 @@ function renderWeek() {
       el.addEventListener('mouseenter', () => { const x = el.querySelector('.cal-ev-del'); if(x) x.style.display=''; });
       el.addEventListener('mouseleave', () => { const x = el.querySelector('.cal-ev-del'); if(x) x.style.display='none'; });
     });
-    col.addEventListener('click', () => { calYear = d.getFullYear(); calMonth = d.getMonth(); calDay = d.getDate(); setCalView('day'); });
-    col.style.cursor = 'pointer';
     grid.appendChild(col);
   }
 }
