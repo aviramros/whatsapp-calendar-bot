@@ -573,6 +573,10 @@ app.post('/config', (req, res) => {
     pinMessages: req.body.pinMessages !== undefined ? Boolean(req.body.pinMessages) : (current.pinMessages ?? false),
     // Admin phone for bot-event notifications
     adminPhone: req.body.adminPhone !== undefined ? String(req.body.adminPhone).trim() : (current.adminPhone ?? ''),
+    // UI layout & colors (sent individually from frontend)
+    cardLayouts:    req.body.cardLayouts    !== undefined ? req.body.cardLayouts    : (current.cardLayouts    ?? {}),
+    calendarColors: req.body.calendarColors !== undefined ? req.body.calendarColors : (current.calendarColors ?? {}),
+    calendarMap:    req.body.calendarMap    !== undefined ? req.body.calendarMap    : (current.calendarMap    ?? {}),
   };
   saveConfig(updated);
 

@@ -2964,9 +2964,10 @@ function saveLayoutFromDropdown(tabName) {
   const order  = items.map(li => li.dataset.cardId);
   const hidden = items.filter(li => !li.querySelector('.layout-dd-check')?.checked).map(li => li.dataset.cardId);
 
-  // Apply order to actual tab
+  // Apply order to actual tab (use _tabCards to avoid matching dropdown li elements)
+  const realCards = _tabCards(tab);
   order.forEach(id => {
-    const card = tab.querySelector(`[data-card-id="${id}"]`);
+    const card = realCards.find(c => c.dataset.cardId === id);
     if (card) tab.appendChild(card);
   });
 
