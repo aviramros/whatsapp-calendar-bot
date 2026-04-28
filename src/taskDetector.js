@@ -116,3 +116,28 @@ function formatDate(iso) {
     return new Date(iso).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' });
   } catch { return iso; }
 }
+
+// ── Uncertain-task replacement helper ────────────────────────────────────────
+/**
+ * Returns true if newText is a refinement/completion of an uncertain oldText.
+ * Only matches when oldText contains '??'.
+ * Strips '??', normalises both sides, then checks:
+ *  1. cleaned-old is a substring of new, OR
+ *  2. word-overlap ratio ≥ 0.6
+ */
+export function isRefinementOf(oldText, newText) {
+  if (!oldText.includes('??')) return false;
+  const norm = s => s
+    .replace(/\?\?+/g, '')
+    .replace(/[^\u05D0-\u05EA\u05F0-\u05F4a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  const o = norm(oldText);
+  const n = norm(newText);
+  if (!o) return false;
+  if (n.includes(o)) return true;
+  const ow = o.split(' ').filter(Boolean);
+  const nw = n.split(' ').filter(Boolean);
+  return ow.filter(w => nw.includes(w)).length / ow.length >= 0.6;
+}

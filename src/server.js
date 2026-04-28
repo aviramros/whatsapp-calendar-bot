@@ -48,7 +48,7 @@ import {
   fetchUpcomingEvents,
   fetchWeekEvents,
 } from './calendar.js';
-import { mightBeTask, classifyTask, enqueuePendingTask, formatFollowUp } from './taskDetector.js';
+import { mightBeTask, classifyTask, enqueuePendingTask, formatFollowUp, isRefinementOf } from './taskDetector.js';
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
          scheduleTodayReminders, stopTodayReminders,
          scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo,
@@ -1083,12 +1083,23 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
                       alreadySent:   true,
                       isAIDetected:  true,
                     };
-                    if (!plan.tasks.find(t => t.fingerprint === fingerprint)) {
-                      plan.tasks.push(planTask);
-                    }
-                    // Also add to allTasks so the UI preview includes it
-                    if (!plan.allTasks.find(t => t.fingerprint === fingerprint)) {
-                      plan.allTasks.push(planTask);
+                    // Replace uncertain (??) task if new task refines it
+                    const replaceIdx = plan.tasks.findIndex(t =>
+                      t.whatsappGroup === grp &&
+                      t.dateISO === dateISO &&
+                      isRefinementOf(t.taskText, task.description)
+                    );
+                    if (replaceIdx >= 0) {
+                      const old = plan.tasks[replaceIdx];
+                      log(`[TaskDetection] Replacing uncertain "${old.taskText}" → "${task.description}" in "${grp}"`);
+                      plan.tasks[replaceIdx] = planTask;
+                      const allIdx = plan.allTasks.findIndex(t => t.fingerprint === old.fingerprint);
+                      if (allIdx >= 0) plan.allTasks[allIdx] = planTask;
+                      else if (!plan.allTasks.find(t => t.fingerprint === fingerprint)) plan.allTasks.push(planTask);
+                    } else {
+                      if (!plan.tasks.find(t => t.fingerprint === fingerprint)) plan.tasks.push(planTask);
+                      // Also add to allTasks so the UI preview includes it
+                      if (!plan.allTasks.find(t => t.fingerprint === fingerprint)) plan.allTasks.push(planTask);
                     }
                     // 2. Create Google Calendar event
                     try {
