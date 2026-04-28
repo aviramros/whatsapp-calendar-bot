@@ -1204,8 +1204,9 @@ app.post('/excel/send-tomorrow-group', async (req, res) => {
   }
 
   // sendTarget is a chat ID (@g.us) — sendWhatsAppMessage will use it directly
-  const sent = await sendWhatsAppMessage(sendTarget, msg.trim());
-  log(`[TestSend] Tomorrow tasks ${sent ? '✅' : '❌'} → "${whatsappGroup}" (${tasks.length} tasks)`);
+  const config = getConfig();
+  const sent = await sendWhatsAppMessage(sendTarget, msg.trim(), { pin: config.pinMessages === true });
+  log(`[TestSend] Tomorrow tasks ${sent ? '✅' : '❌'}${config.pinMessages ? ' 📌' : ''} → "${whatsappGroup}" (${tasks.length} tasks)`);
   res.json({ ok: sent, tasks: tasks.length, error: sent ? null : 'שליחה נכשלה — ודא שהבוט מחובר' });
 });
 

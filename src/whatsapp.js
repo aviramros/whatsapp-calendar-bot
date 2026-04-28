@@ -341,10 +341,11 @@ export async function sendWhatsAppMessage(recipient, text, options = {}) {
     // Pin message if requested (bot must be group admin)
     if (pin && msg) {
       try {
-        await msg.pin(pinDuration);
-        log(`Pinned message in ${recipient} (${pinDuration / 3600}h)`);
+        log(`Attempting to pin message in ${recipient} (msgId: ${msg.id?._serialized}, duration: ${pinDuration}s)...`);
+        const pinResult = await msg.pin(pinDuration);
+        log(`Pin result for ${recipient}: ${JSON.stringify(pinResult)}`);
       } catch (e) {
-        log(`Pin failed for ${recipient}: ${e.message}`);
+        log(`Pin failed for ${recipient}: ${e.message} — stack: ${e.stack?.split('\n')[1] || ''}`);
       }
     }
     return true;
