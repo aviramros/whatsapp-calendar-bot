@@ -1913,9 +1913,8 @@ async function fetchWAGroups(rebuild = false) {
     waGroupsList = (groups || []).map(g => typeof g === 'string' ? { name: g, id: g, label: g } : g);
   } catch { waGroupsList = []; }
   renderWAGroupCheckboxes();
-  // Re-render group map table if it's visible
-  const keys = Object.keys(excelGroupMap);
-  if (keys.length) renderGroupMapTable(keys);
+  // Re-render group map table to refresh WA-group dropdowns (including the בדיקות row)
+  renderGroupMapTable(Object.keys(excelGroupMap));
 }
 
 function toggleGroupsView() {
@@ -2209,36 +2208,70 @@ async function updateSavedPlanBadge(weekLabel) {
 
 function renderGroupMapTable(groups) {
   const tbody = document.querySelector('#group-map-table tbody');
-  if (!groups.length) { tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>'; return; }
-
   const selectStyle = 'width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:.88rem;background:var(--card);color:var(--text)';
 
-  tbody.innerHTML = groups.map(g => {
-    const current = excelGroupMap[g] || ''; // now stores group ID (or legacy name)
-    // Build options from waGroupsList [{name,id,label}]; if current not in list, keep as legacy option
-    const allOpts = waGroupsList.length ? [...waGroupsList] : [];
-    if (current && !allOpts.find(wg => wg.id === current)) {
-      allOpts.unshift({ name: current, id: current, label: current }); // legacy name fallback
-    }
-    const opts = `<option value="">-- בחר קבוצה --</option>` +
-      allOpts.map(wg => `<option value="${esc(wg.id)}" ${wg.id === current ? 'selected' : ''}>${esc(wg.label)}</option>`).join('');
-    const btnId = `send-tmrw-${g.replace(/\s+/g,'_')}`;
-    const btnDisabled = current ? '' : 'disabled';
-    // Find display name for the currently selected group
-    const currentEntry = waGroupsList.find(wg => wg.id === current);
-    const currentName = currentEntry?.name || current;
-    return `<tr>
-      <td style="font-weight:600;min-width:120px">${esc(g)}</td>
+  // "בדיקות" is always rendered as the fixed test row — exclude it from Excel rows
+  const excelGroups = groups.filter(g => g !== 'בדיקות');
+
+  let html = '';
+
+  if (!excelGroups.length) {
+    html += `<tr><td colspan="4" style="color:var(--muted);padding:8px">נתח קובץ Excel כדי לראות את הקבוצות</td></tr>`;
+  } else {
+    html += excelGroups.map(g => {
+      const current = excelGroupMap[g] || ''; // now stores group ID (or legacy name)
+      // Build options from waGroupsList [{name,id,label}]; if current not in list, keep as legacy option
+      const allOpts = waGroupsList.length ? [...waGroupsList] : [];
+      if (current && !allOpts.find(wg => wg.id === current)) {
+        allOpts.unshift({ name: current, id: current, label: current }); // legacy name fallback
+      }
+      const opts = `<option value="">-- בחר קבוצה --</option>` +
+        allOpts.map(wg => `<option value="${esc(wg.id)}" ${wg.id === current ? 'selected' : ''}>${esc(wg.label)}</option>`).join('');
+      const btnId = `send-tmrw-${g.replace(/\s+/g,'_')}`;
+      const btnDisabled = current ? '' : 'disabled';
+      // Find display name for the currently selected group
+      const currentEntry = waGroupsList.find(wg => wg.id === current);
+      const currentName = currentEntry?.name || current;
+      return `<tr>
+        <td style="font-weight:600;min-width:120px">${esc(g)}</td>
+        <td style="color:var(--muted);padding:0 6px">→</td>
+        <td><select data-excel-group="${esc(g)}" style="${selectStyle}">${opts}</select></td>
+        <td style="padding-right:8px;white-space:nowrap">
+          <button id="${btnId}" ${btnDisabled} onclick="sendTomorrowToGroup('${esc(current)}', '${esc(currentName)}', this)"
+            style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;opacity:${current?'1':'0.4'}">
+            📤 שלח למחר
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── שורת בדיקות — תמיד גלויה בתחתית ────────────────────────────────────────
+  const testCurrent = excelGroupMap['בדיקות'] || '';
+  const testAllOpts = waGroupsList.length ? [...waGroupsList] : [];
+  if (testCurrent && !testAllOpts.find(wg => wg.id === testCurrent)) {
+    testAllOpts.unshift({ name: testCurrent, id: testCurrent, label: testCurrent });
+  }
+  const testOpts = `<option value="">-- בחר קבוצת בדיקות --</option>` +
+    testAllOpts.map(wg => `<option value="${esc(wg.id)}" ${wg.id === testCurrent ? 'selected' : ''}>${esc(wg.label)}</option>`).join('');
+
+  html += `
+    <tr><td colspan="4" style="padding:2px 0 4px"><hr style="border:none;border-top:2px dashed var(--border);margin-top:6px"></td></tr>
+    <tr>
+      <td style="font-weight:600;min-width:120px">🧪 בדיקות</td>
       <td style="color:var(--muted);padding:0 6px">→</td>
-      <td><select data-excel-group="${esc(g)}" style="${selectStyle}">${opts}</select></td>
+      <td><select id="bdikot-select" data-excel-group="בדיקות"
+            onchange="const b=document.getElementById('send-tmrw-bdikot');b.style.opacity=this.value?'1':'0.4'"
+            style="${selectStyle}">${testOpts}</select></td>
       <td style="padding-right:8px;white-space:nowrap">
-        <button id="${btnId}" ${btnDisabled} onclick="sendTomorrowToGroup('${esc(current)}', '${esc(currentName)}', this)"
-          style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;opacity:${current?'1':'0.4'}">
+        <button id="send-tmrw-bdikot" onclick="sendTomorrowBdikot(this)"
+          style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;opacity:${testCurrent?'1':'0.4'}">
           📤 שלח למחר
         </button>
       </td>
     </tr>`;
-  }).join('');
+
+  tbody.innerHTML = html;
 }
 
 async function sendTomorrowToGroup(whatsappGroupId, whatsappGroupName, btn) {
@@ -2265,6 +2298,15 @@ async function sendTomorrowToGroup(whatsappGroupId, whatsappGroupName, btn) {
     btn.textContent = '❌ שגיאה';
     setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
   }
+}
+
+// ── Helper for the בדיקות test row (reads select value at click time) ─────────
+function sendTomorrowBdikot(btn) {
+  const sel = document.getElementById('bdikot-select');
+  if (!sel || !sel.value) { toast('בחר קבוצת בדיקות תחילה', 'warning'); return; }
+  const entry = waGroupsList.find(wg => wg.id === sel.value);
+  const name = entry?.name || sel.value;
+  sendTomorrowToGroup(sel.value, name, btn);
 }
 
 async function saveGroupMap() {
