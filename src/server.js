@@ -1060,36 +1060,27 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
                   saveWeeklyPlan(plan);
                   broadcast('weeklyPlanUpdated', {});
 
-                  // 3. Send WhatsApp message — format like "tomorrow tasks" + weather
+                  // 3. Send WhatsApp message — only for tomorrow tasks, only after reminder time
                   const tomorrow = getTomorrowISO();
                   const cfg2 = getConfig();
-                  if (reminderAlreadySentToday()) {
-                    // Reminder already went out today — re-send full updated list
-                    log(`[TaskDetection] Reminder already sent today, re-sending full list to "${grp}"`);
-                    await sendTomorrowReminderForGroup(grp);
-                  } else {
-                    // Build message grouped by date, in "tomorrow tasks" style
-                    const byDate = {};
-                    for (const task of tasks) {
-                      const d = task.date || tomorrow;
-                      (byDate[d] = byDate[d] || []).push(task);
+                  const tomorrowTasks = tasks.filter(t => t.date === tomorrow);
+                  const futureTasks   = tasks.filter(t => t.date && t.date > tomorrow);
+
+                  if (futureTasks.length > 0) {
+                    log(`[TaskDetection] ${futureTasks.length} future task(s) added to plan for "${grp}" — no follow-up (not tomorrow)`);
+                  }
+
+                  if (tomorrowTasks.length > 0) {
+                    if (reminderAlreadySentToday()) {
+                      // Reminder already went out today — re-send full updated list
+                      log(`[TaskDetection] Reminder already sent, re-sending full list to "${grp}"`);
+                      await sendTomorrowReminderForGroup(grp);
+                    } else {
+                      // Before scheduled reminder time — task will be included automatically
+                      const rh = cfg2.groupRemindersHour ?? 7;
+                      const rm = String(cfg2.groupRemindersMinute ?? 0).padStart(2, '0');
+                      log(`[TaskDetection] Tomorrow task added for "${grp}" — will be in ${rh}:${rm} reminder (not sending now)`);
                     }
-                    let msg = '';
-                    for (const [dateISO, dateTasks] of Object.entries(byDate).sort()) {
-                      const dayName = getHebrewDayName(dateISO);
-                      const [, mm, dd] = dateISO.split('-');
-                      const dateLabel = `${parseInt(dd)}.${parseInt(mm)}`;
-                      const isTomorrow = dateISO === tomorrow;
-                      msg += `📋 משימות ${isTomorrow ? 'מחר' : dayName} *מעודכן* — ${dayName} ${dateLabel}:\n\n`;
-                      dateTasks.forEach(t => { msg += `• ${t.description}\n`; });
-                      const weather = await fetchWeatherForDate(dateISO).catch(() => null);
-                      if (weather) {
-                        msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
-                      }
-                      msg += '\n';
-                    }
-                    log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks, ${calendarAdded} to calendar)`);
-                    await sendWhatsAppMessage(grp, msg.trim(), { pin: cfg2.pinMessages === true });
                   }
                 }
               );
