@@ -51,7 +51,7 @@ export async function classifyTask(text, groupName) {
 
   try {
     const response = await getClient().messages.create({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5',
       max_tokens: 120,
       messages: [{ role: 'user', content: prompt }],
     });
