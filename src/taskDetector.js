@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { whatsappEvents } from './whatsapp.js';
 
 // ── Lazy Anthropic client ────────────────────────────────────────────────────
 let _client = null;
@@ -10,7 +11,11 @@ function getClient() {
   return _client;
 }
 
-function log(msg) { console.log(`[TaskDetector] ${msg}`); }
+function log(msg) {
+  const line = `[TaskDetector] ${msg}`;
+  console.log(line);
+  whatsappEvents.emit('log', line);
+}
 
 // ── Pre-filter (cheap, no API call) ─────────────────────────────────────────
 const TIME_WORDS = [
