@@ -31,6 +31,10 @@ const DEFAULTS = {
   calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   cardLayouts: {},     // { tabName: { order: [...], hidden: [...] } } — per-tab card layout
   pinMessages: false,  // auto-pin group reminder messages (bot must be group admin)
+  // Today reminders (morning "משימות היום" message)
+  todayReminderEnabled: false,
+  todayReminderHour: 7,
+  todayReminderMinute: 0,
   // AI task detection
   taskDetectionEnabled: false,
   taskDetectionDelay: 5,            // minutes before sending follow-up

@@ -85,3 +85,21 @@ export function scheduleGroupReminders(hour, minute, callback) {
 export function stopGroupReminders() {
   if (groupRemindersTask) { groupRemindersTask.stop(); groupRemindersTask = null; }
 }
+
+// ── Today reminders scheduler ──────────────────────────────────────────────────
+let todayRemindersTask = null;
+
+export function scheduleTodayReminders(hour, minute, callback) {
+  if (todayRemindersTask) { todayRemindersTask.stop(); todayRemindersTask = null; }
+  const h = Number(hour ?? 7);
+  const m = Number(minute ?? 0);
+  todayRemindersTask = cron.schedule(`${m} ${h} * * *`, async () => {
+    console.log(`[Scheduler] Today reminders trigger fired at ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    try { await callback(); } catch (e) { console.error('[Scheduler] Today reminders error:', e.message); }
+  }, { timezone: 'Asia/Jerusalem' });
+  console.log(`[Scheduler] Today reminders scheduled at ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} Asia/Jerusalem`);
+}
+
+export function stopTodayReminders() {
+  if (todayRemindersTask) { todayRemindersTask.stop(); todayRemindersTask = null; }
+}

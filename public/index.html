@@ -1043,7 +1043,7 @@
       </div>
     </div>
 
-    <!-- Group reminders -->
+    <!-- Group reminders (tomorrow) -->
     <div style="border:1px solid var(--border);border-radius:10px;padding:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div>
@@ -1069,6 +1069,27 @@
             <div style="font-size:.86rem;font-weight:600">נעץ הודעות אוטומטית</div>
             <div style="font-size:.78rem;color:var(--muted);margin-top:2px">הבוט ינעץ כל הודעת תזכורת — דורש שהבוט יהיה מנהל בקבוצה</div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Today reminders -->
+    <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-weight:600;font-size:.9rem">☀️ הודעת משימות היום (בוקר)</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:2px">שולח "משימות היום" בבוקר ונועץ — מחליף את ה"משימות מחר" הנעוצה</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="today-reminder-enabled" onchange="toggleTodayReminder(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="today-reminder-settings" style="display:none">
+        <div class="settings-group" style="max-width:180px">
+          <label>שעת שליחה</label>
+          <input type="time" id="today-reminder-time" value="07:00" onchange="markSettingsDirty()"
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)" />
         </div>
       </div>
     </div>
@@ -1978,6 +1999,11 @@ function toggleWeeklyDispatch(enabled) {
 
 function toggleGroupReminders(enabled) {
   const settings = document.getElementById('group-reminders-settings');
+  if (settings) settings.style.display = enabled ? 'block' : 'none';
+}
+
+function toggleTodayReminder(enabled) {
+  const settings = document.getElementById('today-reminder-settings');
   if (settings) settings.style.display = enabled ? 'block' : 'none';
 }
 
@@ -3049,6 +3075,13 @@ async function loadSettings() {
     const grh = String(cfg.groupRemindersHour ?? 7).padStart(2,'0');
     const grm = String(cfg.groupRemindersMinute ?? 0).padStart(2,'0');
     document.getElementById('group-reminders-time').value = `${grh}:${grm}`;
+    // Today reminders
+    const trEnabled = cfg.todayReminderEnabled ?? false;
+    document.getElementById('today-reminder-enabled').checked = trEnabled;
+    toggleTodayReminder(trEnabled);
+    const trh = String(cfg.todayReminderHour ?? 7).padStart(2,'0');
+    const trm = String(cfg.todayReminderMinute ?? 0).padStart(2,'0');
+    document.getElementById('today-reminder-time').value = `${trh}:${trm}`;
     document.getElementById('pin-messages').checked = cfg.pinMessages ?? false;
     // Task detection
     const tdEnabled = cfg.taskDetectionEnabled ?? false;
@@ -3082,6 +3115,9 @@ async function saveSettings() {
     groupRemindersEnabled: document.getElementById('group-reminders-enabled').checked,
     groupRemindersHour:   parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[0], 10),
     groupRemindersMinute: parseInt((document.getElementById('group-reminders-time').value || '07:00').split(':')[1], 10),
+    todayReminderEnabled: document.getElementById('today-reminder-enabled').checked,
+    todayReminderHour:   parseInt((document.getElementById('today-reminder-time').value || '07:00').split(':')[0], 10),
+    todayReminderMinute: parseInt((document.getElementById('today-reminder-time').value || '07:00').split(':')[1], 10),
     pinMessages: document.getElementById('pin-messages').checked,
     taskDetectionEnabled:       document.getElementById('task-detection-toggle').checked,
     taskDetectionDelay:         parseInt(document.getElementById('task-detection-delay').value, 10),

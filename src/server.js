@@ -50,6 +50,7 @@ import {
 } from './calendar.js';
 import { mightBeTask, classifyTask, enqueuePendingTask, formatFollowUp } from './taskDetector.js';
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
+         scheduleTodayReminders, stopTodayReminders,
          scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo,
          scheduleGroupReminders, stopGroupReminders } from './scheduler.js';
 
@@ -407,6 +408,44 @@ async function sendTomorrowTasksToGroups() {
 }
 
 /**
+ * Sends "משימות היום" to all configured groups.
+ * Replaces the overnight "משימות מחר" pin with a "משימות היום" message.
+ */
+async function sendTodayTasksToGroups() {
+  const config = getConfig();
+  if (!config.todayReminderEnabled) { log('[TodayGroups] Disabled — skipping'); return; }
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) { log('[TodayGroups] No weekly plan saved — skipping'); return; }
+
+  const today = getTodayISO();
+  const tasks = plan.tasks.filter(t => t.dateISO === today && t.whatsappGroup);
+  if (!tasks.length) { log(`[TodayGroups] No group tasks for today (${today})`); return; }
+
+  const byGroup = {};
+  for (const t of tasks) {
+    const key = t.whatsappGroupId || t.whatsappGroup;
+    (byGroup[key] = byGroup[key] || { sendKey: key, displayName: t.whatsappGroup, tasks: [] }).tasks.push(t);
+  }
+
+  const weather  = await fetchWeatherForDate(today);
+  const dayName  = getHebrewDayName(today);
+
+  let sent = 0, failed = 0;
+  for (const { sendKey, displayName, tasks: groupTasks } of Object.values(byGroup)) {
+    let msg = `📋 משימות היום — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
+    groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+    if (weather) {
+      msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+    }
+    const ok = await sendWhatsAppMessage(sendKey, msg.trim(), { pin: config.pinMessages === true });
+    log(`[TodayGroups] ${ok ? '✅' : '❌'}${config.pinMessages ? ' 📌' : ''} → "${displayName}" (${groupTasks.length} tasks)`);
+    if (ok) sent++; else failed++;
+  }
+  const groupCount = Object.keys(byGroup).length;
+  notifyAdmin(`☀️ משימות היום (${dayName}) — ${sent}/${groupCount} קבוצות קיבלו${failed ? ` ❌ ${failed} נכשלו` : ' ✅'}`);
+}
+
+/**
  * Sends the full tomorrow-tasks reminder for a single group.
  * Used when a task is detected AFTER the scheduled reminder already went out.
  */
@@ -651,6 +690,9 @@ app.post('/config', (req, res) => {
     groupRemindersHour:   req.body.groupRemindersHour   !== undefined ? Number(req.body.groupRemindersHour)   : (current.groupRemindersHour   ?? 7),
     groupRemindersMinute: req.body.groupRemindersMinute !== undefined ? Number(req.body.groupRemindersMinute) : (current.groupRemindersMinute ?? 0),
     pinMessages: req.body.pinMessages !== undefined ? Boolean(req.body.pinMessages) : (current.pinMessages ?? false),
+    todayReminderEnabled: req.body.todayReminderEnabled !== undefined ? Boolean(req.body.todayReminderEnabled) : (current.todayReminderEnabled ?? false),
+    todayReminderHour:   req.body.todayReminderHour   !== undefined ? Number(req.body.todayReminderHour)   : (current.todayReminderHour   ?? 7),
+    todayReminderMinute: req.body.todayReminderMinute !== undefined ? Number(req.body.todayReminderMinute) : (current.todayReminderMinute ?? 0),
     // Admin phone for bot-event notifications
     adminPhone: req.body.adminPhone !== undefined ? String(req.body.adminPhone).trim() : (current.adminPhone ?? ''),
     // UI layout & colors (sent individually from frontend)
@@ -682,6 +724,13 @@ app.post('/config', (req, res) => {
     scheduleGroupReminders(updated.groupRemindersHour, updated.groupRemindersMinute, sendTomorrowTasksToGroups);
   } else {
     stopGroupReminders();
+  }
+
+  // Reschedule (or stop) today reminders
+  if (updated.todayReminderEnabled) {
+    scheduleTodayReminders(updated.todayReminderHour, updated.todayReminderMinute, sendTodayTasksToGroups);
+  } else {
+    stopTodayReminders();
   }
 
   const hh = String(updated.summaryHour).padStart(2,'0');
@@ -1253,6 +1302,9 @@ const server = app.listen(PORT, () => {
   }
   if (cfg.groupRemindersEnabled) {
     scheduleGroupReminders(cfg.groupRemindersHour ?? 7, cfg.groupRemindersMinute ?? 0, sendTomorrowTasksToGroups);
+  }
+  if (cfg.todayReminderEnabled) {
+    scheduleTodayReminders(cfg.todayReminderHour ?? 7, cfg.todayReminderMinute ?? 0, sendTodayTasksToGroups);
   }
 
   // Weekly summary: every Friday at 20:00 Israel time
