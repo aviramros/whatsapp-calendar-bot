@@ -993,6 +993,7 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
   // ── AI Task Detection ────────────────────────────────────────────────────────
   {
     const cfg = getConfig();
+    log(`[TaskDetection] enabled=${cfg.taskDetectionEnabled}, group="${groupName}", len=${trimmed.length}`);
     if (cfg.taskDetectionEnabled && groupName && trimmed.length >= 6) {
       const admins = cfg.taskDetectionAdmins || [];
       const senderAllowed = admins.length === 0 ||
@@ -1000,6 +1001,7 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
       if (!senderAllowed) {
         log(`[TaskDetection] Sender ${senderPhone} not in authorized list [${admins.join(', ')}] — skipped`);
       }
+      log(`[TaskDetection] senderAllowed=${senderAllowed}, mightBeTask=${mightBeTask(trimmed)}`);
       if (senderAllowed && mightBeTask(trimmed)) {
         (async () => {
           try {
