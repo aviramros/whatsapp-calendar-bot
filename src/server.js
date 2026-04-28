@@ -627,6 +627,7 @@ app.post('/test-message', async (req, res) => {
 app.get('/config', (req, res) => res.json(getConfig()));
 
 app.post('/config', (req, res) => {
+  log(`[Config] POST received — pinMessages in body: ${JSON.stringify(req.body.pinMessages)}`);
   const current = getConfig();
   const updated = {
     groups: Array.isArray(req.body.groups) ? req.body.groups.map(g => g.trim()).filter(Boolean) : current.groups,
@@ -663,6 +664,7 @@ app.post('/config', (req, res) => {
     taskDetectionMinConfidence: req.body.taskDetectionMinConfidence !== undefined ? Number(req.body.taskDetectionMinConfidence)      : (current.taskDetectionMinConfidence  ?? 0.75),
     taskDetectionAdmins:        Array.isArray(req.body.taskDetectionAdmins)       ? req.body.taskDetectionAdmins                    : (current.taskDetectionAdmins        ?? []),
   };
+  log(`[Config] Saving — pinMessages: ${updated.pinMessages}`);
   saveConfig(updated);
 
   // Reschedule daily sync if time changed
