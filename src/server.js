@@ -1004,7 +1004,10 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
         (async () => {
           try {
             const result = await classifyTask(trimmed, groupName);
-            if (result.isTask && result.confidence >= (cfg.taskDetectionMinConfidence ?? 0.75)) {
+            if (!result.date) {
+              log(`[TaskDetection] Skipped — ambiguous or missing date (isTask=${result.isTask}): "${trimmed.slice(0,60)}"`);
+            }
+            if (result.isTask && result.date && result.confidence >= (cfg.taskDetectionMinConfidence ?? 0.75)) {
               const delayMs = (cfg.taskDetectionDelay ?? 5) * 60 * 1000;
               enqueuePendingTask(
                 groupName,
