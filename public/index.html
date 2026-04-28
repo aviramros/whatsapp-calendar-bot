@@ -1665,6 +1665,12 @@ es.onmessage = e => {
     completedTasks = new Set(data.completed);
     if (excelParsedTasks.length) applyFilters();
     toast('✅ משימות סומנו כבוצעו מוואטסאפ', 'success');
+  } else if (type === 'weeklyPlanUpdated') {
+    // AI detected new tasks — reload the plan preview
+    loadSavedPreview().then(() => {
+      if (excelParsedTasks.length) applyFilters();
+    });
+    toast('✨ משימה חדשה זוהתה ונוספה לתכנית', 'info');
   }
 };
 es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');

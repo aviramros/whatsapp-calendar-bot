@@ -1011,26 +1011,32 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
                 { description: result.description || trimmed, date: result.date, rawText: trimmed },
                 delayMs,
                 async (grp, tasks) => {
-                  // 1. Add tasks to weekly plan
+                  // 1. Add tasks to weekly plan (+ allTasks for UI)
                   let calendarAdded = 0;
-                  const plan = getWeeklyPlan() || { weekLabel: '', tasks: [] };
+                  const plan = getWeeklyPlan() || { weekLabel: '', tasks: [], allTasks: [] };
+                  if (!plan.allTasks) plan.allTasks = [];
                   for (const task of tasks) {
                     const dateISO = task.date || getTomorrowISO();
                     const [, mm, dd] = dateISO.split('-');
                     const dateLabel = `${parseInt(dd)}.${parseInt(mm)}`;
                     const fingerprint = `${grp}|${task.description}|${dateISO}|ai`;
+                    const planTask = {
+                      excelGroup:    grp,
+                      taskText:      task.description,
+                      dateISO,
+                      dateLabel,
+                      whatsappGroup: grp,
+                      fingerprint,
+                      willSend:      false,
+                      alreadySent:   true,
+                      isAIDetected:  true,
+                    };
                     if (!plan.tasks.find(t => t.fingerprint === fingerprint)) {
-                      plan.tasks.push({
-                        excelGroup:   grp,
-                        taskText:     task.description,
-                        dateISO,
-                        dateLabel,
-                        whatsappGroup: grp,
-                        fingerprint,
-                        willSend:     false,
-                        alreadySent:  true,
-                        isAIDetected: true,
-                      });
+                      plan.tasks.push(planTask);
+                    }
+                    // Also add to allTasks so the UI preview includes it
+                    if (!plan.allTasks.find(t => t.fingerprint === fingerprint)) {
+                      plan.allTasks.push(planTask);
                     }
                     // 2. Create Google Calendar event
                     try {
@@ -1051,17 +1057,36 @@ whatsappEvents.on('message', async ({ body, groupName, senderPhone }) => {
                   saveWeeklyPlan(plan);
                   broadcast('weeklyPlanUpdated', {});
 
-                  // 3. Send WhatsApp message
-                  const hasTomorrowTask = tasks.some(t => (t.date || getTomorrowISO()) === getTomorrowISO());
-                  if (hasTomorrowTask && reminderAlreadySentToday()) {
+                  // 3. Send WhatsApp message — format like "tomorrow tasks" + weather
+                  const tomorrow = getTomorrowISO();
+                  const cfg2 = getConfig();
+                  if (reminderAlreadySentToday()) {
                     // Reminder already went out today — re-send full updated list
                     log(`[TaskDetection] Reminder already sent today, re-sending full list to "${grp}"`);
                     await sendTomorrowReminderForGroup(grp);
                   } else {
-                    // Reminder hasn't gone out yet — follow-up is enough, task will be included
-                    const msg = formatFollowUp(grp, tasks, calendarAdded > 0);
+                    // Build message grouped by date, in "tomorrow tasks" style
+                    const byDate = {};
+                    for (const task of tasks) {
+                      const d = task.date || tomorrow;
+                      (byDate[d] = byDate[d] || []).push(task);
+                    }
+                    let msg = '';
+                    for (const [dateISO, dateTasks] of Object.entries(byDate).sort()) {
+                      const dayName = getHebrewDayName(dateISO);
+                      const [, mm, dd] = dateISO.split('-');
+                      const dateLabel = `${parseInt(dd)}.${parseInt(mm)}`;
+                      const isTomorrow = dateISO === tomorrow;
+                      msg += `📋 משימות ${isTomorrow ? 'מחר' : dayName} *מעודכן* — ${dayName} ${dateLabel}:\n\n`;
+                      dateTasks.forEach(t => { msg += `• ${t.description}\n`; });
+                      const weather = await fetchWeatherForDate(dateISO).catch(() => null);
+                      if (weather) {
+                        msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+                      }
+                      msg += '\n';
+                    }
                     log(`[TaskDetection] Sending follow-up to "${grp}" (${tasks.length} tasks, ${calendarAdded} to calendar)`);
-                    await sendWhatsAppMessage(grp, msg);
+                    await sendWhatsAppMessage(grp, msg.trim(), { pin: cfg2.pinMessages === true });
                   }
                 }
               );
