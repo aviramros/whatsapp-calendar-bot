@@ -394,7 +394,7 @@ async function sendTomorrowTasksToGroups() {
 
   let remindersSent = 0, remindersFailed = 0;
   for (const { sendKey, displayName, tasks: groupTasks } of Object.values(byGroup)) {
-    let msg = `📋 משימות מחר — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
+    let msg = `📋 משימות — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
     groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
     if (weather) {
       msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
@@ -465,7 +465,7 @@ async function sendTomorrowReminderForGroup(groupName) {
   const dayName = getHebrewDayName(tomorrow);
   const weather = await fetchWeatherForDate(tomorrow);
 
-  let msg = `📋 *עדכון משימות מחר — ${dayName} ${tasks[0].dateLabel}:*\n\n`;
+  let msg = `📋 *עדכון משימות — ${dayName} ${tasks[0].dateLabel}:*\n\n`;
   tasks.forEach(t => { msg += `• ${t.taskText}${t.isAIDetected ? ' ✨' : ''}\n`; });
   if (weather) {
     msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
@@ -1276,7 +1276,7 @@ app.post('/excel/send-tomorrow-group', async (req, res) => {
 
   const dayName  = getHebrewDayName(tomorrow);
   const weather  = await fetchWeatherForDate(tomorrow);
-  let msg = `📋 משימות מחר — ${dayName} ${tasks[0].dateLabel}:\n\n`;
+  let msg = `📋 משימות — ${dayName} ${tasks[0].dateLabel}:\n\n`;
   tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
   if (weather) {
     msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
