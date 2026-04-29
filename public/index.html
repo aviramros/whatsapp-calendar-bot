@@ -864,6 +864,7 @@
         <div class="cal-view-toggle">
           <button class="cal-view-btn active" id="view-btn-week"  onclick="setCalView('week')">שבוע</button>
           <button class="cal-view-btn" id="view-btn-day"   onclick="setCalView('day')">יום</button>
+          <button class="cal-view-btn" id="view-btn-list"  onclick="setCalView('list')">רשימה</button>
         </div>
         <button class="btn btn-teal" onclick="loadCalendar()">רענן</button>
       </div>
@@ -882,6 +883,10 @@
     <!-- Day view -->
     <div id="cal-day-view" style="display:none">
       <div class="day-view" id="cal-day-list"></div>
+    </div>
+    <!-- List view -->
+    <div id="cal-list-view" style="display:none">
+      <div id="cal-list-body" style="overflow-x:auto"></div>
     </div>
   </div>
 </div>
@@ -1769,11 +1774,14 @@ async function saveCalendarColor(groupName, hex) {
 
 function setCalView(v) {
   calView = v;
-  ['month','week','day'].forEach(x => {
+  ['month','week','day','list'].forEach(x => {
     document.getElementById('view-btn-'+x)?.classList.toggle('active', x === v);
     const el = document.getElementById('cal-'+x+'-view');
     if (el) el.style.display = x === v ? '' : 'none';
   });
+  // Hide nav arrows in list view (shows all events, no pagination)
+  const navEl = document.querySelector('.cal-nav');
+  if (navEl) navEl.style.visibility = v === 'list' ? 'hidden' : '';
   renderCalendar();
 }
 
@@ -1806,7 +1814,44 @@ async function loadCalendar() {
 function renderCalendar() {
   if (calView === 'month') renderMonth();
   else if (calView === 'week') renderWeek();
+  else if (calView === 'list') renderList();
   else renderDay();
+}
+
+// ── List (table) ──
+function renderList() {
+  document.getElementById('cal-title').textContent = 'כל המשימות';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayISO = isoDate(today.getFullYear(), today.getMonth()+1, today.getDate());
+  const sorted = [...calEventsCache].sort((a,b) => (a.date||'') < (b.date||'') ? -1 : (a.date||'') > (b.date||'') ? 1 : 0);
+  const body = document.getElementById('cal-list-body');
+  if (!sorted.length) {
+    body.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">אין משימות ביומן</div>';
+    return;
+  }
+  body.innerHTML = `<table class="excel-table" style="margin-top:4px">
+    <thead><tr>
+      <th style="width:90px">תאריך</th>
+      <th>קבוצה</th>
+      <th>משימה</th>
+    </tr></thead>
+    <tbody>
+      ${sorted.map(ev => {
+        const isPast = ev.date && ev.date < todayISO;
+        const c = calColor(ev.calendar);
+        const [y,m,d] = (ev.date||'').split('-');
+        const dateLabel = d ? `${d}.${m}.${y ? y.slice(2) : ''}` : '';
+        const dayIdx = ev.date ? new Date(ev.date+'T00:00:00').getDay() : -1;
+        const dayName = dayIdx >= 0 ? DAY_NAMES_HE[dayIdx] : '';
+        const rowStyle = isPast ? 'opacity:.35' : '';
+        return `<tr style="${rowStyle}" title="${isPast ? 'תאריך שעבר' : ''}">
+          <td style="white-space:nowrap;direction:ltr;text-align:left;color:${isPast?'var(--muted)':'inherit'}">${dayName} ${dateLabel}</td>
+          <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:${c.dot};flex-shrink:0;display:inline-block"></span>${esc(ev.calendar)}</span></td>
+          <td style="color:${isPast?'var(--muted)':'inherit'}">${esc(ev.title)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
 }
 
 // ── Month ──
