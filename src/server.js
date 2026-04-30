@@ -309,10 +309,16 @@ export async function sendTomorrowTasks() {
   let msg = `📋 משימות למחר — ${dayName} ${dateLabel}:\n\n`;
   tasks.forEach(t => { msg += `• ${t.taskText}\n`; });
 
+  // Append calendar deep-link if app URL is configured
+  if (config.appUrl) {
+    const calUrl = config.appUrl.replace(/\/$/, '') + '/calendar';
+    msg += `\nאפשר לראות את כל המשימות ביומן:\n${calUrl}`;
+  }
+
   // Append weather forecast if available
   const weather = await fetchWeatherForDate(tomorrow);
   if (weather) {
-    msg += `\n${weatherEmoji(weather.code)} מזג אוויר: ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+    msg += `\n\n${weatherEmoji(weather.code)} מזג אוויר: ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
   }
   msg = msg.trim();
 
@@ -695,6 +701,7 @@ app.post('/config', (req, res) => {
     todayReminderMinute: req.body.todayReminderMinute !== undefined ? Number(req.body.todayReminderMinute) : (current.todayReminderMinute ?? 0),
     // Admin phone for bot-event notifications
     adminPhone: req.body.adminPhone !== undefined ? String(req.body.adminPhone).trim() : (current.adminPhone ?? ''),
+    appUrl:     req.body.appUrl     !== undefined ? String(req.body.appUrl).trim()     : (current.appUrl     ?? ''),
     // UI layout & colors (sent individually from frontend)
     cardLayouts:    req.body.cardLayouts    !== undefined ? req.body.cardLayouts    : (current.cardLayouts    ?? {}),
     calendarColors: req.body.calendarColors !== undefined ? req.body.calendarColors : (current.calendarColors ?? {}),

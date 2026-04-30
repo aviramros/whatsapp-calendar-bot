@@ -983,6 +983,13 @@
         <label>שעת שליחה (לדוגמא 07:30 או 21:15)</label>
         <input type="time" id="summary-time" style="max-width:160px;padding:8px;border-radius:8px;border:1px solid var(--border);font-size:.93rem;direction:ltr" />
       </div>
+      <div class="settings-group">
+        <label>קישור ללוח שנה בהודעה (URL הציבורי של האפליקציה — ייכלל אוטומטית בתזכורת)</label>
+        <input type="url" id="app-url" placeholder="https://gadash.duckdns.org"
+          style="width:100%;max-width:340px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);font-size:.93rem;direction:ltr"
+          onchange="markSettingsDirty()" />
+        <div style="font-size:.78rem;color:var(--muted);margin-top:4px">השאר ריק כדי לא לכלול קישור</div>
+      </div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
         <button class="btn btn-blue" onclick="sendTestMessage()">שלח הודעת בדיקה</button>
         <span id="test-msg-feedback" style="display:none;font-size:.85rem;font-weight:600"></span>
@@ -3073,6 +3080,7 @@ async function loadSettings() {
     fetchWAGroups(); // populate checkboxes with live WA groups
     document.getElementById('sync-hours').value = cfg.syncWindowHours;
     document.getElementById('summary-recipient').value = cfg.summaryRecipient || '';
+    document.getElementById('app-url').value = cfg.appUrl || '';
     const h = String(cfg.summaryHour ?? 7).padStart(2, '0');
     const m = String(cfg.summaryMinute ?? 0).padStart(2, '0');
     document.getElementById('summary-time').value = `${h}:${m}`;
@@ -3148,6 +3156,7 @@ async function saveSettings() {
     syncWindowHours: parseInt(document.getElementById('sync-hours').value, 10),
     summaryEnabled: document.getElementById('summary-enabled').checked,
     summaryRecipient: document.getElementById('summary-recipient').value.trim(),
+    appUrl: document.getElementById('app-url').value.trim(),
     summaryHour: parseInt((document.getElementById('summary-time').value || '07:00').split(':')[0], 10),
     summaryMinute: parseInt((document.getElementById('summary-time').value || '07:00').split(':')[1], 10),
     themeColor: document.getElementById('theme-color-picker')?.value || '#3DBDB4',

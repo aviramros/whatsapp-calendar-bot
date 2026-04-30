@@ -28,6 +28,7 @@ const DEFAULTS = {
   latitude: 32.0853,   // default: Tel Aviv area
   longitude: 34.7818,
   adminPhone: '',      // system-admin phone for bot-event notifications
+  appUrl: '',          // public URL of this app (e.g. https://gadash.duckdns.org) — appended to reminders
   calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   cardLayouts: {},     // { tabName: { order: [...], hidden: [...] } } — per-tab card layout
   pinMessages: false,  // auto-pin group reminder messages (bot must be group admin)
