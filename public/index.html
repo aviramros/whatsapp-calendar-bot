@@ -1532,7 +1532,7 @@ function closeTechLock() {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = ['dashboard','excel','calendar','settings'];
 
-function _doShowTab(name) {
+function _doShowTab(name, { pushState = true } = {}) {
   TABS.forEach(t => {
     document.getElementById('nav-' + t)?.classList.toggle('active', t === name);
     document.getElementById('tab-' + t)?.classList.toggle('active', t === name);
@@ -1545,6 +1545,7 @@ function _doShowTab(name) {
   if (name === 'settings') loadSettings();
   if (name === 'excel') initExcelTab();
   if (name === 'dashboard') loadAdminPhone();
+  if (pushState) history.pushState({ tab: name }, '', '/' + name);
 }
 
 function showTab(name) {
@@ -3508,8 +3509,16 @@ document.addEventListener('click', e => {
 })();
 updateNotifUI();
 updateLockIcon();
-// Start on excel if locked, otherwise dashboard — syncs sidebar + bottom nav
-_doShowTab(dashboardUnlocked ? 'dashboard' : 'excel');
+// Start on the tab matching the URL path, or default based on lock state
+const _urlTab = window.location.pathname.replace(/^\//, '').split('/')[0];
+const _initialTab = TABS.includes(_urlTab) ? _urlTab : (dashboardUnlocked ? 'dashboard' : 'excel');
+_doShowTab(_initialTab, { pushState: false });
+
+// Browser back/forward navigation
+window.addEventListener('popstate', e => {
+  const tab = e.state?.tab;
+  if (tab && TABS.includes(tab)) _doShowTab(tab, { pushState: false });
+});
 refreshStatus();
 loadSettings();
 buildSwatches();

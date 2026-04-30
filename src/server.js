@@ -1333,6 +1333,11 @@ app.post('/excel/weekly-summary', async (req, res) => {
   }
 });
 
+// ─── SPA catch-all — must be last route ──────────────────────────────────────
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, '../public/index.html'));
+});
+
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 const server = app.listen(PORT, () => {
