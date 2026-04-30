@@ -156,7 +156,9 @@ export function initWhatsApp() {
       const chat = await message.getChat();
       if (!chat.isGroup) return;
       const groupName = chat.name.trim();
-      const senderPhone = (message.author || message.from || '').split('@')[0].replace(/\D/g, '');
+      // Extract phone — prefer the non-LID user part; WhatsApp may use numeric LIDs in author field
+      const rawAuthor = (message.author || message.from || '').split('@')[0];
+      const senderPhone = rawAuthor.replace(/\D/g, '');
 
       // ── Auto Excel detection (runs on ALL groups, before monitored-groups filter) ──
       {
@@ -167,25 +169,32 @@ export function initWhatsApp() {
             const media = await message.downloadMedia();
             const fname = message._data?.filename || '';
             if (_isExcelMedia(media.mimetype, fname)) {
+              // Resolve actual phone via contact (senderPhone may be a WhatsApp LID, not a real number)
+              let contact, actualPhone;
+              try {
+                contact = await message.getContact();
+                actualPhone = contact.id?.user || senderPhone;
+              } catch (_) {
+                actualPhone = senderPhone;
+              }
               // Check sender authorization
               const admins = cfg.autoExcelAdmins || [];
-              if (admins.length && !admins.includes(senderPhone)) {
-                log(`[AutoExcel] Ignored — sender ${senderPhone} not in authorized list`);
+              if (admins.length && !admins.includes(actualPhone)) {
+                log(`[AutoExcel] Ignored — sender ${actualPhone} not in authorized list`);
               } else {
-              log(`[AutoExcel] Excel file detected in "${groupName}" from ${senderPhone}: ${fname}`);
-              try {
-                const contact = await message.getContact();
-                whatsappEvents.emit('excelReceived', {
-                  data: media.data,
-                  mimetype: media.mimetype,
-                  filename: fname || 'weekly.xlsx',
-                  senderName: contact.pushname || senderPhone,
-                  senderPhone, groupName,
-                  receivedAt: new Date().toISOString(),
-                });
-              } catch (e) {
-                log(`[AutoExcel] Error emitting excelReceived: ${e.message}`);
-              }
+                log(`[AutoExcel] Excel file detected in "${groupName}" from ${actualPhone}: ${fname}`);
+                try {
+                  whatsappEvents.emit('excelReceived', {
+                    data: media.data,
+                    mimetype: media.mimetype,
+                    filename: fname || 'weekly.xlsx',
+                    senderName: contact?.pushname || actualPhone,
+                    senderPhone: actualPhone, groupName,
+                    receivedAt: new Date().toISOString(),
+                  });
+                } catch (e) {
+                  log(`[AutoExcel] Error emitting excelReceived: ${e.message}`);
+                }
               } // end admins check
             }
           }
