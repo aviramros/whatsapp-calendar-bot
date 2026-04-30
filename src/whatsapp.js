@@ -75,6 +75,11 @@ export function getBotPhoneNumber() {
   }
 }
 
+function _isExcelMedia(mime, fname) {
+  return ['spreadsheetml', 'ms-excel'].some(s => (mime || '').includes(s))
+    || ['.xlsx', '.xls'].some(e => (fname || '').toLowerCase().endsWith(e));
+}
+
 export function initWhatsApp() {
   // Remove ALL stale Chromium lock files recursively (handles any session-* subdir)
   const authPath = process.env.WWEBJS_AUTH_PATH || './.wwebjs_auth';
@@ -152,6 +157,35 @@ export function initWhatsApp() {
       if (!chat.isGroup) return;
       const groupName = chat.name.trim();
       const senderPhone = (message.author || message.from || '').split('@')[0].replace(/\D/g, '');
+
+      // ── Auto Excel detection (runs on ALL groups, before monitored-groups filter) ──
+      {
+        const cfg = getConfig();
+        if (cfg.autoExcelEnabled && cfg.autoExcelGroup && message.hasMedia) {
+          const chatId = chat.id._serialized;
+          if (chatId === cfg.autoExcelGroup) {
+            const media = await message.downloadMedia();
+            const fname = message._data?.filename || '';
+            if (_isExcelMedia(media.mimetype, fname)) {
+              log(`[AutoExcel] Excel file detected in "${groupName}" from ${senderPhone}: ${fname}`);
+              try {
+                const contact = await message.getContact();
+                whatsappEvents.emit('excelReceived', {
+                  data: media.data,
+                  mimetype: media.mimetype,
+                  filename: fname || 'weekly.xlsx',
+                  senderName: contact.pushname || senderPhone,
+                  senderPhone, groupName,
+                  receivedAt: new Date().toISOString(),
+                });
+              } catch (e) {
+                log(`[AutoExcel] Error emitting excelReceived: ${e.message}`);
+              }
+            }
+          }
+        }
+      }
+
       const { groups } = getConfig();
       if (!groups.includes(groupName)) {
         log(`Message ignored — group "${groupName}" not in monitored list [${groups.join(', ')}]`);

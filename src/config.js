@@ -6,6 +6,7 @@ const GROUP_MAP_PATH = './data/excel-group-map.json';
 const WEEKLY_PLAN_PATH = './data/weekly-plan.json';
 const COMPLETED_TASKS_PATH = './data/completed-tasks.json';
 const EXCEL_PREVIEW_PATH   = './data/excel-preview.json';
+const PENDING_EXCEL_PATH   = './data/pending-excel.json';
 
 const DEFAULTS = {
   groups: ['השקיה', 'עבודות בית', 'ריסוסים'],
@@ -29,6 +30,10 @@ const DEFAULTS = {
   longitude: 34.7818,
   adminPhone: '',      // system-admin phone for bot-event notifications
   appUrl: '',          // public URL of this app (e.g. https://gadash.duckdns.org) — appended to reminders
+  // Auto Excel loading from WhatsApp
+  autoExcelEnabled: false,
+  autoExcelGroup: '',           // WA group chat ID (serialized) to watch for Excel files
+  autoExcelRequireApproval: true, // if true, admin must approve before plan is loaded
   calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   cardLayouts: {},     // { tabName: { order: [...], hidden: [...] } } — per-tab card layout
   pinMessages: false,  // auto-pin group reminder messages (bot must be group admin)
@@ -112,4 +117,19 @@ export function getExcelPreview() {
 export function saveExcelPreview(data) {
   mkdirSync(dirname(EXCEL_PREVIEW_PATH), { recursive: true });
   writeFileSync(EXCEL_PREVIEW_PATH, JSON.stringify(data, null, 2));
+}
+
+export function getPendingExcel() {
+  if (!existsSync(PENDING_EXCEL_PATH)) return null;
+  try { return JSON.parse(readFileSync(PENDING_EXCEL_PATH, 'utf8')); }
+  catch { return null; }
+}
+
+export function savePendingExcel(data) {
+  if (data === null) {
+    if (existsSync(PENDING_EXCEL_PATH)) writeFileSync(PENDING_EXCEL_PATH, 'null');
+    return;
+  }
+  mkdirSync(dirname(PENDING_EXCEL_PATH), { recursive: true });
+  writeFileSync(PENDING_EXCEL_PATH, JSON.stringify(data, null, 2));
 }

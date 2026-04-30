@@ -34,7 +34,7 @@ import QRCode from 'qrcode';
 import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory, buildGroupCache } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
-import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview } from './config.js';
+import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview, getPendingExcel, savePendingExcel } from './config.js';
 import { parseExcelPlan } from './excel.js';
 import multer from 'multer';
 import {
@@ -702,6 +702,9 @@ app.post('/config', (req, res) => {
     // Admin phone for bot-event notifications
     adminPhone: req.body.adminPhone !== undefined ? String(req.body.adminPhone).trim() : (current.adminPhone ?? ''),
     appUrl:     req.body.appUrl     !== undefined ? String(req.body.appUrl).trim()     : (current.appUrl     ?? ''),
+    autoExcelEnabled:         req.body.autoExcelEnabled         !== undefined ? Boolean(req.body.autoExcelEnabled)         : (current.autoExcelEnabled         ?? false),
+    autoExcelGroup:           req.body.autoExcelGroup           !== undefined ? String(req.body.autoExcelGroup).trim()      : (current.autoExcelGroup           ?? ''),
+    autoExcelRequireApproval: req.body.autoExcelRequireApproval !== undefined ? Boolean(req.body.autoExcelRequireApproval) : (current.autoExcelRequireApproval ?? true),
     // UI layout & colors (sent individually from frontend)
     cardLayouts:    req.body.cardLayouts    !== undefined ? req.body.cardLayouts    : (current.cardLayouts    ?? {}),
     calendarColors: req.body.calendarColors !== undefined ? req.body.calendarColors : (current.calendarColors ?? {}),
@@ -835,6 +838,38 @@ app.post('/calendar/delete-event', async (req, res) => {
     res.json({ ok: false, error: err.message });
   }
 });
+
+// ─── Auto Excel helper ────────────────────────────────────────────────────────
+async function loadExcelBuffer(buffer, senderName, groupName) {
+  const { weekLabel, tasks } = parseExcelPlan(buffer);
+  const groupMap = getGroupMap();
+  const enriched = tasks.map(t => {
+    const wg = groupMap[t.excelGroup] || '';
+    const fp = `${wg}|${t.taskText}|${t.dateISO}`;
+    return { ...t, whatsappGroup: wg, fingerprint: fp, willSend: !!wg, alreadySent: !!wg && state.has(fp) };
+  });
+  saveCompletedTasks([]);
+  // Merge with carry-over (same logic as /excel/save-plan)
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const existing = getWeeklyPlan();
+  let finalTasks = enriched, finalAll = enriched;
+  if (existing?.tasks?.length) {
+    const fps = new Set(enriched.map(t => t.fingerprint).filter(Boolean));
+    const co  = existing.tasks.filter(t => t.dateISO >= todayISO && !fps.has(t.fingerprint));
+    if (co.length) {
+      finalTasks = [...co, ...enriched].sort((a, b) => (a.dateISO || '') < (b.dateISO || '') ? -1 : 1);
+      finalAll   = [...co.filter(t => !fps.has(t.fingerprint)), ...enriched]
+        .sort((a, b) => (a.dateISO || '') < (b.dateISO || '') ? -1 : 1);
+      log(`[AutoExcel] Merged carry-over: ${co.length} task(s) from current week`);
+    }
+  }
+  saveWeeklyPlan({ weekLabel, tasks: finalTasks, savedAt: new Date().toISOString() });
+  saveExcelPreview({ weekLabel, allTasks: finalAll, savedAt: new Date().toISOString() });
+  log(`[AutoExcel] Loaded: ${finalTasks.length} tasks (${weekLabel}) from ${senderName} / ${groupName}`);
+  notifyAdmin(`✅ תכנית שבועית נטענה!\nמאת: ${senderName} | ${groupName}\nשבוע: ${weekLabel} | ${finalTasks.length} משימות`);
+  broadcast('weeklyPlanUpdated', { weekLabel, taskCount: finalTasks.length });
+  return { weekLabel, count: finalTasks.length };
+}
 
 // ─── Excel routes ─────────────────────────────────────────────────────────────
 
@@ -1265,6 +1300,39 @@ app.delete('/excel/reset', (req, res) => {
   }
 });
 
+// ── Pending Excel (auto-load from WhatsApp) ───────────────────────────────────
+app.get('/excel/pending', (req, res) => {
+  const p = getPendingExcel();
+  if (!p) return res.json(null);
+  const { data: _omit, ...meta } = p; // exclude raw base64
+  res.json(meta);
+});
+
+app.post('/excel/pending/approve', async (req, res) => {
+  const p = getPendingExcel();
+  if (!p) return res.status(404).json({ ok: false, error: 'No pending Excel' });
+  try {
+    const result = await loadExcelBuffer(Buffer.from(p.data, 'base64'), p.senderName, p.groupName);
+    savePendingExcel(null);
+    broadcast('pendingExcelCleared', {});
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    log(`[AutoExcel] Approve error: ${e.message}`);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete('/excel/pending', (req, res) => {
+  const p = getPendingExcel();
+  savePendingExcel(null);
+  if (p) {
+    notifyAdmin(`❌ קובץ Excel נדחה (מאת ${p.senderName})`);
+    log(`[AutoExcel] Pending Excel rejected (from ${p.senderName})`);
+  }
+  broadcast('pendingExcelCleared', {});
+  res.json({ ok: true });
+});
+
 // Clear calendar fingerprints so events can be re-imported after manual deletion from Google Calendar
 // Clears only cal: prefixed entries (calendar-only dispatches) by default,
 // or specific fingerprints if provided in body.
@@ -1343,6 +1411,31 @@ app.post('/excel/weekly-summary', async (req, res) => {
 // ─── SPA catch-all — must be last route ──────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../public/index.html'));
+});
+
+// ─── Auto Excel listener ──────────────────────────────────────────────────────
+whatsappEvents.on('excelReceived', async (payload) => {
+  const cfg = getConfig();
+  if (!cfg.autoExcelEnabled) return;
+  const { data, filename, senderName, senderPhone, groupName, receivedAt } = payload;
+  log(`[AutoExcel] Excel received: "${filename}" from ${senderName} in "${groupName}"`);
+  if (cfg.autoExcelRequireApproval) {
+    savePendingExcel(payload);
+    const link = cfg.appUrl
+      ? `${cfg.appUrl.replace(/\/$/, '')}/excel`
+      : '(פתח מערכת → Excel)';
+    notifyAdmin(`📎 קובץ Excel חדש התקבל!\nמאת: ${senderName} | ${groupName}\nקובץ: ${filename}\n\nלאישור טעינה:\n${link}`);
+    broadcast('pendingExcel', { filename, senderName, senderPhone, groupName, receivedAt });
+    log(`[AutoExcel] Pending approval — admin notified`);
+  } else {
+    try {
+      await loadExcelBuffer(Buffer.from(data, 'base64'), senderName, groupName);
+    } catch (e) {
+      log(`[AutoExcel] Auto-load error: ${e.message}`);
+      notifyAdmin(`❌ שגיאה בטעינת Excel אוטומטית: ${e.message}`);
+    }
+    savePendingExcel(null);
+  }
 });
 
 // ─── Startup ──────────────────────────────────────────────────────────────────

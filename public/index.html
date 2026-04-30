@@ -1239,6 +1239,40 @@
     </div>
   </div>
 
+  <!-- ── Auto Excel loading ── -->
+  <div class="card card-wide" data-card-id="auto-excel">
+    <div class="card-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      טעינת Excel אוטומטית מ-WhatsApp
+    </div>
+    <p style="font-size:.84rem;color:var(--muted);margin-bottom:14px">כשמנהל שולח קובץ Excel בקבוצה הנבחרת, הבוט יזהה אותו ויציע לטעון כתכנית שבועית</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-weight:600;font-size:.9rem">הפעל</div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="auto-excel-enabled" onchange="toggleAutoExcel(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="auto-excel-settings" style="display:none">
+      <div class="settings-group">
+        <label>קבוצה לניטור קבצי Excel</label>
+        <select id="auto-excel-group" onchange="markSettingsDirty()"
+          style="width:100%;max-width:320px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)">
+          <option value="">— בחר קבוצה —</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:12px;background:var(--bg);border-radius:10px">
+        <div>
+          <div style="font-weight:600;font-size:.88rem">דרוש אישור לפני טעינה</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:2px">הבוט ישלח התראה ויחכה לאישורך במערכת</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="auto-excel-require-approval" onchange="markSettingsDirty()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -1271,6 +1305,21 @@
       <button onclick="loadWeather()" style="margin-right:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:.8rem;padding:2px 6px;border-radius:5px" title="רענן">↻</button>
     </div>
     <div id="weather-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+  </div>
+
+  <!-- Pending Excel approval banner -->
+  <div id="pending-excel-banner" style="display:none;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px 16px;margin-bottom:4px">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <span style="font-size:1.3rem;line-height:1">📎</span>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:.92rem;color:#92400e">קובץ Excel ממתין לאישור</div>
+        <div id="pending-excel-meta" style="font-size:.83rem;color:#78350f;margin-top:4px"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-teal" onclick="approveExcelUpload(this)" style="font-size:.85rem;padding:6px 16px">✅ אשר וטען</button>
+          <button class="btn btn-gray" onclick="rejectExcelUpload(this)" style="font-size:.85rem;padding:6px 14px">❌ דחה</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="saved-plan-badge" style="display:none;background:var(--teal-light);color:var(--teal);border-radius:9px;padding:9px 14px;font-size:.87rem;font-weight:600;align-items:center;gap:8px">
@@ -1705,6 +1754,12 @@ es.onmessage = e => {
       if (excelParsedTasks.length) applyFilters();
     });
     toast('✨ משימה חדשה זוהתה ונוספה לתכנית', 'info');
+  } else if (type === 'pendingExcel') {
+    checkPendingExcel();
+    toast('📎 קובץ Excel חדש ממתין לאישורך', 'info');
+  } else if (type === 'pendingExcelCleared') {
+    const banner = document.getElementById('pending-excel-banner');
+    if (banner) banner.style.display = 'none';
   }
 };
 es.onerror = () => appendLog('SSE disconnected — reconnecting...', 'err');
@@ -2060,6 +2115,68 @@ function toggleTodayReminder(enabled) {
   if (settings) settings.style.display = enabled ? 'block' : 'none';
 }
 
+function toggleAutoExcel(enabled) {
+  const settings = document.getElementById('auto-excel-settings');
+  if (settings) settings.style.display = enabled ? 'block' : 'none';
+  if (enabled) {
+    // populate group selector from waGroupsList
+    const sel = document.getElementById('auto-excel-group');
+    if (sel && waGroupsList.length) {
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">— בחר קבוצה —</option>' +
+        waGroupsList.map(g => `<option value="${esc(g.id)}"${g.id === cur ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
+    }
+  }
+  markSettingsDirty();
+}
+
+async function checkPendingExcel() {
+  try {
+    const p = await fetch(`${API_BASE}/excel/pending`).then(r => r.json());
+    const banner = document.getElementById('pending-excel-banner');
+    const meta   = document.getElementById('pending-excel-meta');
+    if (!banner) return;
+    if (p) {
+      const dt = p.receivedAt ? new Date(p.receivedAt).toLocaleString('he-IL', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'numeric' }) : '';
+      meta.textContent = `${p.filename} • מאת: ${p.senderName} | ${p.groupName}${dt ? ' • ' + dt : ''}`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch {}
+}
+
+async function approveExcelUpload(btn) {
+  btn.disabled = true; btn.textContent = 'טוען...';
+  try {
+    const res  = await fetch(`${API_BASE}/excel/pending/approve`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('pending-excel-banner').style.display = 'none';
+      toast(`✅ תכנית נטענה: ${data.weekLabel} (${data.count} משימות)`, 'success');
+      await loadSavedPreview();
+    } else {
+      toast('שגיאה: ' + (data.error || 'לא ידוע'), 'error');
+      btn.disabled = false; btn.textContent = '✅ אשר וטען';
+    }
+  } catch (e) {
+    toast('שגיאה: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '✅ אשר וטען';
+  }
+}
+
+async function rejectExcelUpload(btn) {
+  btn.disabled = true;
+  try {
+    await fetch(`${API_BASE}/excel/pending`, { method: 'DELETE' });
+    document.getElementById('pending-excel-banner').style.display = 'none';
+    toast('קובץ Excel נדחה', 'info');
+  } catch (e) {
+    toast('שגיאה: ' + e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
 function onTaskDetectionToggle(forceValue) {
   const enabled = forceValue !== undefined ? forceValue : document.getElementById('task-detection-toggle').checked;
   const settings = document.getElementById('task-detection-settings');
@@ -2173,6 +2290,7 @@ async function initExcelTab() {
   // Always reload from server so changes made by other users are reflected
   await loadSavedPreview();
   updateSavedPlanBadge(null);
+  checkPendingExcel();
   loadWeather();
 }
 
@@ -3147,6 +3265,20 @@ async function loadSettings() {
     document.getElementById('task-conf-val').textContent = confPct + '%';
     taskAdmins = cfg.taskDetectionAdmins || [];
     renderTaskAdmins();
+    // Auto Excel
+    const aeEnabled = cfg.autoExcelEnabled ?? false;
+    document.getElementById('auto-excel-enabled').checked = aeEnabled;
+    toggleAutoExcel(aeEnabled);
+    if (aeEnabled && cfg.autoExcelGroup) {
+      // Ensure the saved group is pre-selected even before WA groups load
+      const sel = document.getElementById('auto-excel-group');
+      if (sel && !sel.querySelector(`option[value="${CSS.escape(cfg.autoExcelGroup)}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = cfg.autoExcelGroup; opt.textContent = cfg.autoExcelGroup; opt.selected = true;
+        sel.appendChild(opt);
+      } else if (sel) sel.value = cfg.autoExcelGroup;
+    }
+    document.getElementById('auto-excel-require-approval').checked = cfg.autoExcelRequireApproval ?? true;
   } catch {}
 }
 
@@ -3177,6 +3309,9 @@ async function saveSettings() {
     taskDetectionDelay:         parseInt(document.getElementById('task-detection-delay').value, 10),
     taskDetectionMinConfidence: parseInt(document.getElementById('task-detection-confidence').value, 10) / 100,
     taskDetectionAdmins:        taskAdmins,
+    autoExcelEnabled:         document.getElementById('auto-excel-enabled').checked,
+    autoExcelGroup:           document.getElementById('auto-excel-group').value,
+    autoExcelRequireApproval: document.getElementById('auto-excel-require-approval').checked,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
