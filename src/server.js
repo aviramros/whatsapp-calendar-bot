@@ -705,6 +705,7 @@ app.post('/config', (req, res) => {
     autoExcelEnabled:         req.body.autoExcelEnabled         !== undefined ? Boolean(req.body.autoExcelEnabled)         : (current.autoExcelEnabled         ?? false),
     autoExcelGroup:           req.body.autoExcelGroup           !== undefined ? String(req.body.autoExcelGroup).trim()      : (current.autoExcelGroup           ?? ''),
     autoExcelRequireApproval: req.body.autoExcelRequireApproval !== undefined ? Boolean(req.body.autoExcelRequireApproval) : (current.autoExcelRequireApproval ?? true),
+    autoExcelAdmins:          Array.isArray(req.body.autoExcelAdmins) ? req.body.autoExcelAdmins : (current.autoExcelAdmins ?? []),
     // UI layout & colors (sent individually from frontend)
     cardLayouts:    req.body.cardLayouts    !== undefined ? req.body.cardLayouts    : (current.cardLayouts    ?? {}),
     calendarColors: req.body.calendarColors !== undefined ? req.body.calendarColors : (current.calendarColors ?? {}),

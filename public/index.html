@@ -1271,6 +1271,19 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+
+      <!-- Authorized senders -->
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:.84rem;font-weight:600;margin-bottom:4px">מספרים מורשים לשליחת Excel</div>
+        <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px">רק מהמספרים האלה יתקבל קובץ Excel. השאר ריק כדי לאפשר לכולם בקבוצה.</div>
+        <div id="auto-excel-admins-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div class="add-group-row" style="max-width:280px">
+          <input type="text" id="auto-excel-admin-input" placeholder="972501234567" dir="ltr"
+            style="flex:1;font-size:.84rem"
+            onkeydown="if(event.key==='Enter')addAutoExcelAdmin()">
+          <button class="btn btn-teal" style="font-size:.82rem;padding:5px 12px" onclick="addAutoExcelAdmin()">הוסף</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2190,6 +2203,7 @@ function markSettingsDirty() {}
 
 // ── Task Detection — authorized admins ────────────────────────────────────────
 let taskAdmins = [];
+let autoExcelAdmins = [];
 
 function renderTaskAdmins() {
   const container = document.getElementById('task-admins-list');
@@ -2216,6 +2230,34 @@ function addTaskAdmin() {
 function removeTaskAdmin(phone) {
   taskAdmins = taskAdmins.filter(p => p !== phone);
   renderTaskAdmins();
+  markSettingsDirty();
+}
+
+function renderAutoExcelAdmins() {
+  const container = document.getElementById('auto-excel-admins-list');
+  if (!container) return;
+  if (!autoExcelAdmins.length) {
+    container.innerHTML = '<span style="font-size:.76rem;color:var(--muted);font-style:italic">ריקה — כל שולח בקבוצה מורשה</span>';
+    return;
+  }
+  container.innerHTML = autoExcelAdmins.map(phone => `
+    <span style="display:inline-flex;align-items:center;gap:5px;background:var(--teal-light);color:var(--teal);border-radius:20px;padding:3px 10px;font-size:.8rem;font-weight:600;direction:ltr">
+      ${phone}
+      <button onclick="removeAutoExcelAdmin('${phone}')" style="background:none;border:none;cursor:pointer;color:var(--teal);font-size:.9rem;padding:0;line-height:1">&times;</button>
+    </span>`).join('');
+}
+
+function addAutoExcelAdmin() {
+  const input = document.getElementById('auto-excel-admin-input');
+  const phone = input.value.replace(/\D/g, '').replace(/^0/, '972');
+  if (!phone || phone.length < 9) { toast('מספר לא תקין', 'error'); return; }
+  if (!autoExcelAdmins.includes(phone)) { autoExcelAdmins.push(phone); renderAutoExcelAdmins(); markSettingsDirty(); }
+  input.value = '';
+}
+
+function removeAutoExcelAdmin(phone) {
+  autoExcelAdmins = autoExcelAdmins.filter(p => p !== phone);
+  renderAutoExcelAdmins();
   markSettingsDirty();
 }
 
@@ -3279,6 +3321,8 @@ async function loadSettings() {
       } else if (sel) sel.value = cfg.autoExcelGroup;
     }
     document.getElementById('auto-excel-require-approval').checked = cfg.autoExcelRequireApproval ?? true;
+    autoExcelAdmins = cfg.autoExcelAdmins || [];
+    renderAutoExcelAdmins();
   } catch {}
 }
 
@@ -3312,6 +3356,7 @@ async function saveSettings() {
     autoExcelEnabled:         document.getElementById('auto-excel-enabled').checked,
     autoExcelGroup:           document.getElementById('auto-excel-group').value,
     autoExcelRequireApproval: document.getElementById('auto-excel-require-approval').checked,
+    autoExcelAdmins:          autoExcelAdmins,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

@@ -34,6 +34,7 @@ const DEFAULTS = {
   autoExcelEnabled: false,
   autoExcelGroup: '',           // WA group chat ID (serialized) to watch for Excel files
   autoExcelRequireApproval: true, // if true, admin must approve before plan is loaded
+  autoExcelAdmins: [],            // authorized sender phone numbers (empty = anyone in group)
   calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   cardLayouts: {},     // { tabName: { order: [...], hidden: [...] } } — per-tab card layout
   pinMessages: false,  // auto-pin group reminder messages (bot must be group admin)

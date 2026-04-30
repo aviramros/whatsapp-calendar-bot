@@ -167,6 +167,11 @@ export function initWhatsApp() {
             const media = await message.downloadMedia();
             const fname = message._data?.filename || '';
             if (_isExcelMedia(media.mimetype, fname)) {
+              // Check sender authorization
+              const admins = cfg.autoExcelAdmins || [];
+              if (admins.length && !admins.includes(senderPhone)) {
+                log(`[AutoExcel] Ignored — sender ${senderPhone} not in authorized list`);
+              } else {
               log(`[AutoExcel] Excel file detected in "${groupName}" from ${senderPhone}: ${fname}`);
               try {
                 const contact = await message.getContact();
@@ -181,6 +186,7 @@ export function initWhatsApp() {
               } catch (e) {
                 log(`[AutoExcel] Error emitting excelReceived: ${e.message}`);
               }
+              } // end admins check
             }
           }
         }
