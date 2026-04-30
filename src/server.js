@@ -835,13 +835,42 @@ app.post('/calendar/delete-event', async (req, res) => {
 app.post('/excel/save-plan', (req, res) => {
   const { weekLabel, tasks, allTasks } = req.body;
   if (!Array.isArray(tasks)) return res.status(400).json({ ok: false, error: 'tasks missing' });
-  saveWeeklyPlan({ weekLabel, tasks, savedAt: new Date().toISOString() });
+
+  // ── Merge with carry-over: keep tasks from existing plan for dates >= today ──
+  // This allows uploading next week's plan mid-week without losing remaining
+  // days of the current week (e.g. upload next week on Thursday → keep Fri+Sat).
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const existing = getWeeklyPlan();
+
+  let finalTasks    = tasks;
+  let finalAllTasks = Array.isArray(allTasks) ? allTasks : tasks;
+
+  if (existing?.tasks?.length) {
+    const newFPs = new Set(tasks.map(t => t.fingerprint).filter(Boolean));
+    const carryover = existing.tasks.filter(t =>
+      t.dateISO >= todayISO && !newFPs.has(t.fingerprint)
+    );
+    if (carryover.length) {
+      finalTasks = [...carryover, ...tasks]
+        .sort((a, b) => (a.dateISO || '') < (b.dateISO || '') ? -1 : 1);
+      // Also carry over into allTasks (for UI table)
+      const allFPs = new Set(finalAllTasks.map(t => t.fingerprint).filter(Boolean));
+      const carryoverAll = carryover.filter(t => !allFPs.has(t.fingerprint));
+      if (carryoverAll.length) {
+        finalAllTasks = [...carryoverAll, ...finalAllTasks]
+          .sort((a, b) => (a.dateISO || '') < (b.dateISO || '') ? -1 : 1);
+      }
+      log(`[Plan] Merged carry-over: ${carryover.length} task(s) from current week (>= ${todayISO}) kept`);
+    }
+  }
+
+  saveWeeklyPlan({ weekLabel, tasks: finalTasks, savedAt: new Date().toISOString() });
   // Also persist the full table (all tasks including unmapped) for UI restoration after refresh
   if (Array.isArray(allTasks)) {
-    saveExcelPreview({ weekLabel, allTasks, savedAt: new Date().toISOString() });
+    saveExcelPreview({ weekLabel, allTasks: finalAllTasks, savedAt: new Date().toISOString() });
   }
-  log(`[Plan] Weekly plan saved: ${tasks.length} tasks (${weekLabel})`);
-  res.json({ ok: true, count: tasks.length });
+  log(`[Plan] Weekly plan saved: ${finalTasks.length} tasks (${weekLabel})${finalTasks.length > tasks.length ? ` [${finalTasks.length - tasks.length} carry-over]` : ''}`);
+  res.json({ ok: true, count: finalTasks.length });
 });
 
 app.get('/excel/saved-plan', (req, res) => {
