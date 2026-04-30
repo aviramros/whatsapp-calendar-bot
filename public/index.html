@@ -2162,9 +2162,8 @@ async function initExcelTab() {
   ]);
   renderGroupMapTable(Object.keys(excelGroupMap).length ? Object.keys(excelGroupMap) : []);
   await loadCompletedTasks();
-  // Restore parsed table from server if the user refreshed the page
-  if (!excelParsedTasks.length) await loadSavedPreview();
-  else renderExcelPreview(excelParsedTasks);
+  // Always reload from server so changes made by other users are reflected
+  await loadSavedPreview();
   updateSavedPlanBadge(null);
   loadWeather();
 }

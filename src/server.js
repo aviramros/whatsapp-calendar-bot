@@ -852,12 +852,17 @@ app.get('/excel/saved-plan', (req, res) => {
 // Restore full preview table after page refresh — recomputes alreadySent from live state
 app.get('/excel/preview', (req, res) => {
   const preview = getExcelPreview();
-  if (!preview) return res.json(null);
-  const allTasks = (preview.allTasks || []).map(t => ({
+  // Fallback: if preview is missing/empty, use weekly-plan tasks so the table is never blank
+  const source = (preview?.allTasks?.length) ? preview : (() => {
+    const plan = getWeeklyPlan();
+    return plan?.tasks?.length ? { weekLabel: plan.weekLabel, allTasks: plan.tasks, savedAt: plan.savedAt } : null;
+  })();
+  if (!source) return res.json(null);
+  const allTasks = source.allTasks.map(t => ({
     ...t,
     alreadySent: !!t.fingerprint && state.has(t.fingerprint),
   }));
-  res.json({ weekLabel: preview.weekLabel, allTasks, savedAt: preview.savedAt });
+  res.json({ weekLabel: source.weekLabel, allTasks, savedAt: source.savedAt });
 });
 
 app.get('/excel/group-map', (req, res) => res.json(getGroupMap()));
