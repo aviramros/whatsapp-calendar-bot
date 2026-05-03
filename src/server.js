@@ -424,19 +424,66 @@ async function sendApprovalRequestToManagers(messages, dayName, reminderTimeStr)
   log(`[ManagerApproval] Preview sent to ${phones.length} manager(s)`);
 }
 
-/** Executes the pending approval — sends originals or corrected text to all groups. */
+/**
+ * Parses a manager's correction reply and maps it to individual group messages.
+ * Supports two formats:
+ *   1. Sections delimited by ━━━ GROUP ━━━ (manager edited the preview)
+ *   2. Single prefix "GROUP_NAME: corrected text" (applies to one group, others keep original)
+ *   3. Plain text — applied to all groups
+ * Returns an array of { ...groupMsg, correctedText } where correctedText=null means use original.
+ */
+function parseGroupCorrections(correctedText, groupMessages) {
+  // Format 1: ━━━ separator blocks (manager edited the full preview)
+  const sepPattern = /━{3}\s*(.+?)\s*━{3}/g;
+  const seps = [...correctedText.matchAll(sepPattern)];
+  if (seps.length > 0) {
+    const blocks = {};
+    for (let i = 0; i < seps.length; i++) {
+      const name = seps[i][1].trim();
+      const start = seps[i].index + seps[i][0].length;
+      const end   = i + 1 < seps.length ? seps[i + 1].index : correctedText.length;
+      blocks[name] = correctedText.slice(start, end).trim();
+    }
+    return groupMessages.map(g => ({
+      ...g,
+      correctedText: blocks[g.displayName] ?? null,  // null = keep original
+    }));
+  }
+
+  // Format 2: "GROUP_NAME: ..." — applies to one group only
+  for (const g of groupMessages) {
+    const prefix = g.displayName + ':';
+    if (correctedText.startsWith(prefix)) {
+      const text = correctedText.slice(prefix.length).trim();
+      return groupMessages.map(m => ({
+        ...m,
+        correctedText: m.displayName === g.displayName ? text : null,
+      }));
+    }
+  }
+
+  // Format 3: plain text → all groups get the same correction
+  return groupMessages.map(g => ({ ...g, correctedText }));
+}
+
+/** Executes the pending approval — sends originals or per-group corrections. */
 async function executePendingApproval(correctedText = null) {
   const pending = getPendingApproval();
   if (!pending || pending.status !== 'pending') {
     log('[ManagerApproval] No pending approval to execute');
     return;
   }
-  const config = getConfig();
+
+  const perGroup = correctedText
+    ? parseGroupCorrections(correctedText, pending.groupMessages)
+    : pending.groupMessages.map(g => ({ ...g, correctedText: null }));
+
   let sent = 0, failed = 0;
-  for (const { sendKey, displayName, text, pin } of pending.groupMessages) {
-    const msgText = correctedText || text;
+  for (const { sendKey, displayName, text, pin, correctedText: ct } of perGroup) {
+    const msgText = ct || text;
     const ok = await sendWhatsAppMessage(sendKey, msgText, { pin });
-    log(`[ManagerApproval] ${correctedText ? 'Corrected' : 'Approved'} → "${displayName}" ${ok ? '✅' : '❌'}`);
+    const tag = ct ? 'מתוקן' : 'מאושר';
+    log(`[ManagerApproval] ${tag} → "${displayName}" ${ok ? '✅' : '❌'}`);
     if (ok) sent++; else failed++;
   }
   savePendingApproval({ ...pending, status: 'sent', sentAt: new Date().toISOString() });
