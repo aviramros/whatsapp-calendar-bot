@@ -157,10 +157,14 @@ export function initWhatsApp() {
       if (!chat.isGroup) {
         // Forward direct (1-to-1) messages from manager phones for the approval flow
         const cfg = getConfig();
-        if (cfg.managerApprovalEnabled && cfg.managerApprovalPhones?.length) {
-          const fromPhone = (message.from || '').split('@')[0].replace(/\D/g, '');
-          if (cfg.managerApprovalPhones.includes(fromPhone)) {
+        const fromPhone = (message.from || '').split('@')[0].replace(/\D/g, '');
+        if (cfg.managerApprovalEnabled) {
+          const authorized = cfg.managerApprovalPhones || [];
+          log(`[ManagerApproval] Direct message from ${fromPhone} (authorized: [${authorized.join(',')}]): "${(message.body||'').slice(0,60)}"`);
+          if (authorized.includes(fromPhone)) {
             whatsappEvents.emit('managerDirectMessage', { body: message.body || '', senderPhone: fromPhone });
+          } else {
+            log(`[ManagerApproval] Phone ${fromPhone} not in authorized list — ignored`);
           }
         }
         return;
