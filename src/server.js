@@ -482,8 +482,11 @@ async function sendTomorrowTasksToGroups() {
       return;
     }
     if (pending?.status === 'pending') {
-      log('[TomorrowGroups] Manager approval timeout — auto-sending');
-      await executePendingApproval();
+      log('[TomorrowGroups] Manager approval still pending — skipping scheduled send (waiting for reply)');
+      const phones = cfg.managerApprovalPhones || [];
+      for (const phone of phones) {
+        await sendWhatsAppMessage(phone, `⏰ שעת שליחת התזכורת הגיעה — ממתין לאישורך.\nהשב *אישור* לשליחה, *ביטול* לביטול, או שלח טקסט מתוקן.`);
+      }
       return;
     }
     // No pending record → pre-send didn't run (e.g. just enabled) — fall through to normal send
