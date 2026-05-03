@@ -400,7 +400,16 @@ async function buildGroupReminderMessages() {
     let msg = `📋 משימות — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
     groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
     if (weather) msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
-    messages.push({ sendKey, displayName, text: msg.trim(), pin: config.pinMessages === true });
+    messages.push({
+      sendKey,
+      displayName,
+      text: msg.trim(),
+      pin: config.pinMessages === true,
+      // stored so executePendingApproval can update plan + calendar on correction
+      originalTasks: groupTasks.map(t => t.taskText),
+      dateISO: tomorrow,
+      dateLabel: groupTasks[0].dateLabel,
+    });
   }
   return { messages, dayName };
 }
@@ -466,6 +475,95 @@ function parseGroupCorrections(correctedText, groupMessages) {
   return groupMessages.map(g => ({ ...g, correctedText }));
 }
 
+/**
+ * Removes duplicate bullet lines (lines starting with •) from a message block.
+ * Preserves order and keeps the first occurrence of each unique line.
+ * Non-bullet lines (header, weather) are preserved as-is.
+ */
+function deduplicateLines(text) {
+  const seen = new Set();
+  return text.split('\n').filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('•')) return true; // keep non-bullet lines
+    if (seen.has(trimmed)) return false;
+    seen.add(trimmed);
+    return true;
+  }).join('\n');
+}
+
+/**
+ * Extracts task text lines from a corrected message (lines starting with • or -).
+ * Returns an array of plain task strings (without the bullet prefix).
+ */
+function parseTasksFromCorrectedText(text) {
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.startsWith('•') || l.startsWith('-'))
+    .map(l => l.replace(/^[•\-]\s*/, '').trim())
+    .filter(Boolean);
+}
+
+/**
+ * Updates the weekly plan: replaces tasks for the given group+date with the corrected list.
+ * Preserves other groups and other dates.
+ */
+function updatePlanWithCorrectedTasks(displayName, correctedTaskTexts, dateISO, dateLabel) {
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks) return;
+
+  // Remove existing tasks for this group+date
+  const kept = plan.tasks.filter(t =>
+    !(t.whatsappGroup === displayName && t.dateISO === dateISO)
+  );
+
+  // Build new task entries from corrected text
+  const newTasks = correctedTaskTexts.map(text => ({
+    taskText: text,
+    whatsappGroup: displayName,
+    dateISO,
+    dateLabel: dateLabel || dateISO,
+    fingerprint: `${displayName}|${text}|${dateISO}`,
+    willSend: true,
+  }));
+
+  // Insert new tasks sorted by dateISO
+  const merged = [...kept, ...newTasks].sort((a, b) =>
+    (a.dateISO || '') < (b.dateISO || '') ? -1 : 1
+  );
+
+  saveWeeklyPlan({ ...plan, tasks: merged, savedAt: new Date().toISOString() });
+  log(`[ManagerApproval] Plan updated for "${displayName}" on ${dateISO}: ${newTasks.length} tasks`);
+  broadcast('weeklyPlanUpdated', { groupName: displayName, dateISO, taskCount: newTasks.length });
+}
+
+/**
+ * Syncs Google Calendar for a group: deletes old task events, creates new ones.
+ */
+async function syncCorrectedTasksToCalendar(auth, displayName, oldTaskTexts, newTaskTexts, dateISO) {
+  try {
+    const calendarIds = await resolveCalendarIds(auth);
+    const calId = await getOrCreateCalendar(auth, displayName, calendarIds);
+    if (!calId) {
+      log(`[ManagerApproval] No calendar mapped for "${displayName}" — skipping calendar sync`);
+      return;
+    }
+
+    // Delete old tasks
+    for (const title of oldTaskTexts) {
+      const deleted = await deleteAllDayEvent(auth, calId, title, dateISO);
+      if (deleted > 0) log(`[ManagerApproval] Calendar: deleted "${title}" from "${displayName}" on ${dateISO}`);
+    }
+
+    // Create new tasks
+    for (const title of newTaskTexts) {
+      const created = await createAllDayEvent(auth, calId, title, dateISO);
+      log(`[ManagerApproval] Calendar: ${created ? 'created' : 'skipped (exists)'} "${title}" in "${displayName}" on ${dateISO}`);
+    }
+  } catch (err) {
+    log(`[ManagerApproval] Calendar sync error for "${displayName}": ${err.message}`);
+  }
+}
+
 /** Executes the pending approval — sends originals or per-group corrections. */
 async function executePendingApproval(correctedText = null) {
   const pending = getPendingApproval();
@@ -478,13 +576,31 @@ async function executePendingApproval(correctedText = null) {
     ? parseGroupCorrections(correctedText, pending.groupMessages)
     : pending.groupMessages.map(g => ({ ...g, correctedText: null }));
 
+  // Get Google auth once (needed for calendar sync)
+  let auth = null;
+  if (correctedText) {
+    try { auth = await getAuthenticatedClient(); } catch (_) {}
+  }
+
   let sent = 0, failed = 0;
-  for (const { sendKey, displayName, text, pin, correctedText: ct } of perGroup) {
-    const msgText = ct || text;
+  for (const { sendKey, displayName, text, pin, correctedText: ct, originalTasks, dateISO, dateLabel } of perGroup) {
+    // Deduplicate bullet lines in any corrected text before sending
+    const msgText = ct ? deduplicateLines(ct) : text;
     const ok = await sendWhatsAppMessage(sendKey, msgText, { pin });
     const tag = ct ? 'מתוקן' : 'מאושר';
     log(`[ManagerApproval] ${tag} → "${displayName}" ${ok ? '✅' : '❌'}`);
     if (ok) sent++; else failed++;
+
+    // If manager sent corrections — update plan + calendar
+    if (ct && dateISO) {
+      const newTaskTexts = parseTasksFromCorrectedText(ct);
+      if (newTaskTexts.length > 0) {
+        updatePlanWithCorrectedTasks(displayName, newTaskTexts, dateISO, dateLabel);
+        if (auth && originalTasks?.length) {
+          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, newTaskTexts, dateISO);
+        }
+      }
+    }
   }
   savePendingApproval({ ...pending, status: 'sent', sentAt: new Date().toISOString() });
   const dayName = pending.dayName || '';
