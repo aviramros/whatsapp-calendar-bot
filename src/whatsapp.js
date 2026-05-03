@@ -157,14 +157,19 @@ export function initWhatsApp() {
       if (!chat.isGroup) {
         // Forward direct (1-to-1) messages from manager phones for the approval flow
         const cfg = getConfig();
-        const fromPhone = (message.from || '').split('@')[0].replace(/\D/g, '');
         if (cfg.managerApprovalEnabled) {
+          // message.from may be a WhatsApp LID — resolve real phone via getContact()
+          let actualPhone = (message.from || '').split('@')[0].replace(/\D/g, '');
+          try {
+            const contact = await message.getContact();
+            actualPhone = contact.id?.user || actualPhone;
+          } catch (_) {}
           const authorized = cfg.managerApprovalPhones || [];
-          log(`[ManagerApproval] Direct message from ${fromPhone} (authorized: [${authorized.join(',')}]): "${(message.body||'').slice(0,60)}"`);
-          if (authorized.includes(fromPhone)) {
-            whatsappEvents.emit('managerDirectMessage', { body: message.body || '', senderPhone: fromPhone });
+          log(`[ManagerApproval] Direct message from ${actualPhone}: "${(message.body||'').slice(0,60)}"`);
+          if (authorized.includes(actualPhone)) {
+            whatsappEvents.emit('managerDirectMessage', { body: message.body || '', senderPhone: actualPhone });
           } else {
-            log(`[ManagerApproval] Phone ${fromPhone} not in authorized list — ignored`);
+            log(`[ManagerApproval] Phone ${actualPhone} not in authorized list — ignored`);
           }
         }
         return;
