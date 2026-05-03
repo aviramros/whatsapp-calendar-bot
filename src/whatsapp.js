@@ -154,7 +154,17 @@ export function initWhatsApp() {
   client.on('message', async (message) => {
     try {
       const chat = await message.getChat();
-      if (!chat.isGroup) return;
+      if (!chat.isGroup) {
+        // Forward direct (1-to-1) messages from manager phones for the approval flow
+        const cfg = getConfig();
+        if (cfg.managerApprovalEnabled && cfg.managerApprovalPhones?.length) {
+          const fromPhone = (message.from || '').split('@')[0].replace(/\D/g, '');
+          if (cfg.managerApprovalPhones.includes(fromPhone)) {
+            whatsappEvents.emit('managerDirectMessage', { body: message.body || '', senderPhone: fromPhone });
+          }
+        }
+        return;
+      }
       const groupName = chat.name.trim();
       // Extract phone — prefer the non-LID user part; WhatsApp may use numeric LIDs in author field
       const rawAuthor = (message.author || message.from || '').split('@')[0];

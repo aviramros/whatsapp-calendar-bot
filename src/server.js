@@ -34,7 +34,7 @@ import QRCode from 'qrcode';
 import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory, buildGroupCache } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
-import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview, getPendingExcel, savePendingExcel } from './config.js';
+import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview, getPendingExcel, savePendingExcel, getPendingApproval, savePendingApproval } from './config.js';
 import { parseExcelPlan } from './excel.js';
 import multer from 'multer';
 import {
@@ -52,7 +52,8 @@ import { mightBeTask, classifyTask, enqueuePendingTask, formatFollowUp, isRefine
 import { startScheduler, scheduleAt, getCurrentScheduledHour, getCurrentScheduledMinute,
          scheduleTodayReminders, stopTodayReminders,
          scheduleWeeklyDispatch, stopWeeklyDispatch, getWeeklyDispatchInfo,
-         scheduleGroupReminders, stopGroupReminders } from './scheduler.js';
+         scheduleGroupReminders, stopGroupReminders,
+         scheduleManagerApprovalPreSend, stopManagerApprovalPreSend } from './scheduler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -375,11 +376,118 @@ export async function autoDispatchWeeklyPlan() {
   broadcast('syncComplete', { created: [], skipped: [], errors: [], autoDispatch: true });
 }
 
+// ─── Manager approval helpers ─────────────────────────────────────────────────
+
+/** Builds the group-keyed reminder messages for tomorrow without sending them. */
+async function buildGroupReminderMessages() {
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) return null;
+  const tomorrow = getTomorrowISO();
+  const tasks = plan.tasks.filter(t => t.dateISO === tomorrow && t.whatsappGroup);
+  if (!tasks.length) return null;
+
+  const byGroup = {};
+  for (const t of tasks) {
+    const key = t.whatsappGroupId || t.whatsappGroup;
+    (byGroup[key] = byGroup[key] || { sendKey: key, displayName: t.whatsappGroup, tasks: [] }).tasks.push(t);
+  }
+  const weather = await fetchWeatherForDate(tomorrow);
+  const dayName = getHebrewDayName(tomorrow);
+  const config  = getConfig();
+
+  const messages = [];
+  for (const { sendKey, displayName, tasks: groupTasks } of Object.values(byGroup)) {
+    let msg = `📋 משימות — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
+    groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
+    if (weather) msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+    messages.push({ sendKey, displayName, text: msg.trim(), pin: config.pinMessages === true });
+  }
+  return { messages, dayName };
+}
+
+/** Sends the approval-request preview to all manager phones. */
+async function sendApprovalRequestToManagers(messages, dayName, reminderTimeStr) {
+  const cfg = getConfig();
+  const phones = cfg.managerApprovalPhones || [];
+  if (!phones.length) { log('[ManagerApproval] No manager phones configured'); return; }
+
+  let preview = `📋 *בקשת אישור — תזכורת מחר (${dayName})*\n`;
+  preview += `ההודעות האלו תישלחנה לקבוצות ב-${reminderTimeStr}:\n\n`;
+  for (const { displayName, text } of messages) {
+    preview += `━━━ ${displayName} ━━━\n${text}\n\n`;
+  }
+  preview += `השב *אישור* לאישור ושליחה, או שלח טקסט מתוקן.`;
+
+  for (const phone of phones) {
+    await sendWhatsAppMessage(phone, preview.trim());
+  }
+  log(`[ManagerApproval] Preview sent to ${phones.length} manager(s)`);
+}
+
+/** Executes the pending approval — sends originals or corrected text to all groups. */
+async function executePendingApproval(correctedText = null) {
+  const pending = getPendingApproval();
+  if (!pending || pending.status !== 'pending') {
+    log('[ManagerApproval] No pending approval to execute');
+    return;
+  }
+  const config = getConfig();
+  let sent = 0, failed = 0;
+  for (const { sendKey, displayName, text, pin } of pending.groupMessages) {
+    const msgText = correctedText || text;
+    const ok = await sendWhatsAppMessage(sendKey, msgText, { pin });
+    log(`[ManagerApproval] ${correctedText ? 'Corrected' : 'Approved'} → "${displayName}" ${ok ? '✅' : '❌'}`);
+    if (ok) sent++; else failed++;
+  }
+  savePendingApproval({ ...pending, status: 'sent', sentAt: new Date().toISOString() });
+  const dayName = pending.dayName || '';
+  notifyAdmin(`✅ תזכורות מחר (${dayName}) נשלחו — ${sent}/${pending.groupMessages.length} קבוצות${failed ? ` ❌ ${failed} נכשלו` : ''}`);
+  broadcast('managerApprovalExecuted', { sent, failed });
+}
+
+/** Pre-send job: builds draft, stores it, sends to manager phones for approval. */
+async function managerApprovalPreSendJob() {
+  const cfg = getConfig();
+  if (!cfg.managerApprovalEnabled || !cfg.groupRemindersEnabled) return;
+
+  log('[ManagerApproval] Building draft for approval...');
+  const built = await buildGroupReminderMessages();
+  if (!built) { log('[ManagerApproval] No tasks for tomorrow — skipping'); return; }
+
+  const { messages, dayName } = built;
+  const rh = String(cfg.groupRemindersHour ?? 7).padStart(2, '0');
+  const rm = String(cfg.groupRemindersMinute ?? 0).padStart(2, '0');
+
+  savePendingApproval({
+    groupMessages: messages,
+    dayName,
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+  });
+
+  await sendApprovalRequestToManagers(messages, dayName, `${rh}:${rm}`);
+}
+
 // ─── Daily tomorrow-tasks reminder per WhatsApp group ────────────────────────
 
 async function sendTomorrowTasksToGroups() {
   const config = getConfig();
   if (!config.groupRemindersEnabled) return;
+
+  // Manager approval mode: check pending state
+  if (config.managerApprovalEnabled) {
+    const pending = getPendingApproval();
+    if (pending?.status === 'sent') {
+      log('[TomorrowGroups] Already sent via manager approval — skipping');
+      return;
+    }
+    if (pending?.status === 'pending') {
+      log('[TomorrowGroups] Manager approval timeout — auto-sending');
+      await executePendingApproval();
+      return;
+    }
+    // No pending record → pre-send didn't run (e.g. just enabled) — fall through to normal send
+  }
 
   const plan = getWeeklyPlan();
   if (!plan?.tasks?.length) return;
@@ -706,6 +814,10 @@ app.post('/config', (req, res) => {
     autoExcelGroup:           req.body.autoExcelGroup           !== undefined ? String(req.body.autoExcelGroup).trim()      : (current.autoExcelGroup           ?? ''),
     autoExcelRequireApproval: req.body.autoExcelRequireApproval !== undefined ? Boolean(req.body.autoExcelRequireApproval) : (current.autoExcelRequireApproval ?? true),
     autoExcelAdmins:          Array.isArray(req.body.autoExcelAdmins) ? req.body.autoExcelAdmins : (current.autoExcelAdmins ?? []),
+    // Manager approval before group reminders
+    managerApprovalEnabled:     req.body.managerApprovalEnabled     !== undefined ? Boolean(req.body.managerApprovalEnabled)     : (current.managerApprovalEnabled     ?? false),
+    managerApprovalPhones:      Array.isArray(req.body.managerApprovalPhones) ? req.body.managerApprovalPhones : (current.managerApprovalPhones ?? []),
+    managerApprovalLeadMinutes: req.body.managerApprovalLeadMinutes !== undefined ? Number(req.body.managerApprovalLeadMinutes)   : (current.managerApprovalLeadMinutes ?? 60),
     // UI layout & colors (sent individually from frontend)
     cardLayouts:    req.body.cardLayouts    !== undefined ? req.body.cardLayouts    : (current.cardLayouts    ?? {}),
     calendarColors: req.body.calendarColors !== undefined ? req.body.calendarColors : (current.calendarColors ?? {}),
@@ -742,6 +854,16 @@ app.post('/config', (req, res) => {
     scheduleTodayReminders(updated.todayReminderHour, updated.todayReminderMinute, sendTodayTasksToGroups);
   } else {
     stopTodayReminders();
+  }
+
+  // Reschedule (or stop) manager approval pre-send
+  if (updated.managerApprovalEnabled && updated.groupRemindersEnabled) {
+    scheduleManagerApprovalPreSend(
+      updated.groupRemindersHour, updated.groupRemindersMinute,
+      updated.managerApprovalLeadMinutes, managerApprovalPreSendJob
+    );
+  } else {
+    stopManagerApprovalPreSend();
   }
 
   const hh = String(updated.summaryHour).padStart(2,'0');
@@ -1414,6 +1536,30 @@ app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../public/index.html'));
 });
 
+// ─── Manager approval — reply listener ───────────────────────────────────────
+whatsappEvents.on('managerDirectMessage', async ({ body, senderPhone }) => {
+  const pending = getPendingApproval();
+  if (!pending || pending.status !== 'pending') return;
+
+  const trimmed = body.trim();
+  const isApproval = /^(אישור|אשר|ok|כן|approve)$/i.test(trimmed);
+  const isCancel   = /^(ביטול|בטל|לא|no|cancel)$/i.test(trimmed);
+
+  if (isCancel) {
+    savePendingApproval({ ...pending, status: 'cancelled' });
+    notifyAdmin(`❌ תזכורת מחר (${pending.dayName}) בוטלה על ידי ${senderPhone}`);
+    log(`[ManagerApproval] Cancelled by ${senderPhone}`);
+    return;
+  }
+  if (isApproval) {
+    log(`[ManagerApproval] Approved by ${senderPhone}`);
+    await executePendingApproval();
+  } else {
+    log(`[ManagerApproval] Corrections received from ${senderPhone} — sending corrected version`);
+    await executePendingApproval(trimmed);
+  }
+});
+
 // ─── Auto Excel listener ──────────────────────────────────────────────────────
 whatsappEvents.on('excelReceived', async (payload) => {
   const cfg = getConfig();
@@ -1456,6 +1602,12 @@ const server = app.listen(PORT, () => {
   }
   if (cfg.todayReminderEnabled) {
     scheduleTodayReminders(cfg.todayReminderHour ?? 7, cfg.todayReminderMinute ?? 0, sendTodayTasksToGroups);
+  }
+  if (cfg.managerApprovalEnabled && cfg.groupRemindersEnabled) {
+    scheduleManagerApprovalPreSend(
+      cfg.groupRemindersHour ?? 7, cfg.groupRemindersMinute ?? 0,
+      cfg.managerApprovalLeadMinutes ?? 60, managerApprovalPreSendJob
+    );
   }
 
   // Weekly summary: every Friday at 20:00 Israel time

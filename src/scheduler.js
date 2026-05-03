@@ -86,6 +86,31 @@ export function stopGroupReminders() {
   if (groupRemindersTask) { groupRemindersTask.stop(); groupRemindersTask = null; }
 }
 
+// ── Manager approval pre-send scheduler ───────────────────────────────────────
+let managerApprovalTask = null;
+
+/**
+ * Schedules the manager-approval pre-send job to fire `leadMinutes` before
+ * the group-reminders time (reminderHour:reminderMinute).
+ */
+export function scheduleManagerApprovalPreSend(reminderHour, reminderMinute, leadMinutes, callback) {
+  if (managerApprovalTask) { managerApprovalTask.stop(); managerApprovalTask = null; }
+  const totalMin = reminderHour * 60 + reminderMinute - Number(leadMinutes);
+  // Wrap negative times (e.g. reminder at 00:30, lead 60 → 23:30 prev day)
+  const wrapped = ((totalMin % 1440) + 1440) % 1440;
+  const h = Math.floor(wrapped / 60);
+  const m = wrapped % 60;
+  managerApprovalTask = cron.schedule(`${m} ${h} * * *`, async () => {
+    console.log(`[Scheduler] Manager approval pre-send firing at ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    try { await callback(); } catch (e) { console.error('[Scheduler] Manager approval error:', e.message); }
+  }, { timezone: 'Asia/Jerusalem' });
+  console.log(`[Scheduler] Manager approval pre-send at ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} Asia/Jerusalem (${leadMinutes}min before reminders)`);
+}
+
+export function stopManagerApprovalPreSend() {
+  if (managerApprovalTask) { managerApprovalTask.stop(); managerApprovalTask = null; }
+}
+
 // ── Today reminders scheduler ──────────────────────────────────────────────────
 let todayRemindersTask = null;
 

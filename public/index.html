@@ -1082,6 +1082,43 @@
             <div style="font-size:.78rem;color:var(--muted);margin-top:2px">הבוט ינעץ כל הודעת תזכורת — דורש שהבוט יהיה מנהל בקבוצה</div>
           </div>
         </div>
+
+        <!-- Manager approval -->
+        <div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div>
+              <div style="font-weight:600;font-size:.88rem">✅ אישור מנהל לפני שליחה</div>
+              <div style="font-size:.78rem;color:var(--muted);margin-top:2px">שולח טיוטה למנהל לאישור לפני שמשגרים לקבוצות</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="manager-approval-enabled" onchange="toggleManagerApproval(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div id="manager-approval-settings" style="display:none;border-top:1px solid var(--border);padding-top:12px">
+            <div class="settings-group" style="margin-bottom:12px;max-width:220px">
+              <label>שליחה לאישור כמה זמן מראש</label>
+              <select id="manager-approval-lead" onchange="markSettingsDirty()"
+                style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--card);color:var(--text)">
+                <option value="30">30 דקות לפני</option>
+                <option value="60">60 דקות לפני</option>
+                <option value="90">90 דקות לפני</option>
+                <option value="120">120 דקות לפני</option>
+                <option value="150">150 דקות לפני</option>
+                <option value="180">180 דקות לפני</option>
+              </select>
+            </div>
+            <div style="font-size:.84rem;font-weight:600;margin-bottom:4px">מספרי מנהלים לאישור</div>
+            <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px">טיוטת התזכורת תישלח למספרים אלה. השב <strong>אישור</strong> לאישור, או שלח טקסט מתוקן.</div>
+            <div id="manager-approval-phones-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+            <div class="add-group-row" style="max-width:280px">
+              <input type="text" id="manager-approval-phone-input" placeholder="972501234567" dir="ltr"
+                style="flex:1;font-size:.84rem"
+                onkeydown="if(event.key==='Enter')addManagerApprovalPhone()">
+              <button class="btn btn-teal" style="font-size:.82rem;padding:5px 12px" onclick="addManagerApprovalPhone()">הוסף</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2204,6 +2241,7 @@ function markSettingsDirty() {}
 // ── Task Detection — authorized admins ────────────────────────────────────────
 let taskAdmins = [];
 let autoExcelAdmins = [];
+let managerApprovalPhones = [];
 
 function renderTaskAdmins() {
   const container = document.getElementById('task-admins-list');
@@ -2258,6 +2296,40 @@ function addAutoExcelAdmin() {
 function removeAutoExcelAdmin(phone) {
   autoExcelAdmins = autoExcelAdmins.filter(p => p !== phone);
   renderAutoExcelAdmins();
+  markSettingsDirty();
+}
+
+function toggleManagerApproval(enabled) {
+  const s = document.getElementById('manager-approval-settings');
+  if (s) s.style.display = enabled ? 'block' : 'none';
+  markSettingsDirty();
+}
+
+function renderManagerApprovalPhones() {
+  const container = document.getElementById('manager-approval-phones-list');
+  if (!container) return;
+  if (!managerApprovalPhones.length) {
+    container.innerHTML = '<span style="font-size:.76rem;color:var(--muted);font-style:italic">לא הוגדרו מנהלים</span>';
+    return;
+  }
+  container.innerHTML = managerApprovalPhones.map(phone => `
+    <span style="display:inline-flex;align-items:center;gap:5px;background:var(--teal-light);color:var(--teal);border-radius:20px;padding:3px 10px;font-size:.8rem;font-weight:600;direction:ltr">
+      ${phone}
+      <button onclick="removeManagerApprovalPhone('${phone}')" style="background:none;border:none;cursor:pointer;color:var(--teal);font-size:.9rem;padding:0;line-height:1">&times;</button>
+    </span>`).join('');
+}
+
+function addManagerApprovalPhone() {
+  const input = document.getElementById('manager-approval-phone-input');
+  const phone = input.value.replace(/\D/g, '').replace(/^0/, '972');
+  if (!phone || phone.length < 9) { toast('מספר לא תקין', 'error'); return; }
+  if (!managerApprovalPhones.includes(phone)) { managerApprovalPhones.push(phone); renderManagerApprovalPhones(); markSettingsDirty(); }
+  input.value = '';
+}
+
+function removeManagerApprovalPhone(phone) {
+  managerApprovalPhones = managerApprovalPhones.filter(p => p !== phone);
+  renderManagerApprovalPhones();
   markSettingsDirty();
 }
 
@@ -3323,6 +3395,13 @@ async function loadSettings() {
     document.getElementById('auto-excel-require-approval').checked = cfg.autoExcelRequireApproval ?? true;
     autoExcelAdmins = cfg.autoExcelAdmins || [];
     renderAutoExcelAdmins();
+    // Manager approval
+    const maEnabled = cfg.managerApprovalEnabled ?? false;
+    document.getElementById('manager-approval-enabled').checked = maEnabled;
+    toggleManagerApproval(maEnabled);
+    document.getElementById('manager-approval-lead').value = String(cfg.managerApprovalLeadMinutes ?? 60);
+    managerApprovalPhones = cfg.managerApprovalPhones || [];
+    renderManagerApprovalPhones();
   } catch {}
 }
 
@@ -3357,6 +3436,9 @@ async function saveSettings() {
     autoExcelGroup:           document.getElementById('auto-excel-group').value,
     autoExcelRequireApproval: document.getElementById('auto-excel-require-approval').checked,
     autoExcelAdmins:          autoExcelAdmins,
+    managerApprovalEnabled:     document.getElementById('manager-approval-enabled').checked,
+    managerApprovalLeadMinutes: parseInt(document.getElementById('manager-approval-lead').value, 10),
+    managerApprovalPhones:      managerApprovalPhones,
   };
   try {
     await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

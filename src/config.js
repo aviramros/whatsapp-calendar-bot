@@ -38,6 +38,10 @@ const DEFAULTS = {
   calendarColors: {},  // { groupName: '#hexcolor' } — user-defined calendar label colors
   cardLayouts: {},     // { tabName: { order: [...], hidden: [...] } } — per-tab card layout
   pinMessages: false,  // auto-pin group reminder messages (bot must be group admin)
+  // Manager approval before daily group reminders
+  managerApprovalEnabled: false,
+  managerApprovalPhones: [],        // e.g. ['972541234567']
+  managerApprovalLeadMinutes: 60,   // minutes before reminder to send approval request
   // Today reminders (morning "משימות היום" message)
   todayReminderEnabled: false,
   todayReminderHour: 7,
@@ -118,6 +122,17 @@ export function getExcelPreview() {
 export function saveExcelPreview(data) {
   mkdirSync(dirname(EXCEL_PREVIEW_PATH), { recursive: true });
   writeFileSync(EXCEL_PREVIEW_PATH, JSON.stringify(data, null, 2));
+}
+
+const PENDING_APPROVAL_PATH = './data/pending-approval.json';
+export function getPendingApproval() {
+  if (!existsSync(PENDING_APPROVAL_PATH)) return null;
+  try { return JSON.parse(readFileSync(PENDING_APPROVAL_PATH, 'utf8')); }
+  catch { return null; }
+}
+export function savePendingApproval(data) {
+  mkdirSync(dirname(PENDING_APPROVAL_PATH), { recursive: true });
+  writeFileSync(PENDING_APPROVAL_PATH, data === null ? 'null' : JSON.stringify(data, null, 2));
 }
 
 export function getPendingExcel() {
