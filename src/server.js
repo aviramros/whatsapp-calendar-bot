@@ -615,6 +615,24 @@ async function executePendingApproval(correctedText = null) {
     const newTaskTexts = ct !== null ? parseTasksFromCorrectedText(ct || '') : [];
     let msgText;
 
+    // Fallback for old pending-approval.json saved without per-group dateISO:
+    // parse from message header "5.5:" → "2026-05-05", or createdAt+1day
+    const effectiveDateISO = dateISO || (() => {
+      const m = (text || '').match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?[:\s]/);
+      if (m) {
+        const day = String(parseInt(m[1])).padStart(2, '0');
+        const month = String(parseInt(m[2])).padStart(2, '0');
+        const year = m[3] ? m[3] : String(new Date(pending.createdAt || Date.now()).getFullYear());
+        return `${year}-${month}-${day}`;
+      }
+      if (pending.createdAt) {
+        const d = new Date(pending.createdAt);
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().slice(0, 10);
+      }
+      return null;
+    })();
+
     if (ct === null) {
       // Not mentioned by manager → keep original
       msgText = text;
@@ -622,18 +640,18 @@ async function executePendingApproval(correctedText = null) {
       // Explicit empty section → "no tasks" message
       const hdr = text.split('\n')[0]; // reuse "📋 משימות — יום X DD.M:" header line
       msgText = `${hdr}\n\nאין משימות מחר ✅`;
-      if (dateISO) {
-        updatePlanWithCorrectedTasks(displayName, [], dateISO, dateLabel);
+      if (effectiveDateISO) {
+        updatePlanWithCorrectedTasks(displayName, [], effectiveDateISO, dateLabel);
         if (auth && originalTasks?.length)
-          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, [], dateISO);
+          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, [], effectiveDateISO);
       }
     } else {
       // Correction with actual tasks
       msgText = deduplicateLines(ct);
-      if (dateISO) {
-        updatePlanWithCorrectedTasks(displayName, newTaskTexts, dateISO, dateLabel);
+      if (effectiveDateISO) {
+        updatePlanWithCorrectedTasks(displayName, newTaskTexts, effectiveDateISO, dateLabel);
         if (auth && originalTasks?.length)
-          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, newTaskTexts, dateISO);
+          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, newTaskTexts, effectiveDateISO);
       }
     }
 
