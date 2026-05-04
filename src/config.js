@@ -99,6 +99,19 @@ export function getWeeklyPlan() {
 
 export function saveWeeklyPlan(plan) {
   mkdirSync(dirname(WEEKLY_PLAN_PATH), { recursive: true });
+  // Deduplicate tasks by (whatsappGroup | taskText | dateISO) before persisting
+  if (plan?.tasks) {
+    const seen = new Set();
+    plan = {
+      ...plan,
+      tasks: plan.tasks.filter(t => {
+        const key = `${t.whatsappGroup || ''}|${t.taskText || ''}|${t.dateISO || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+    };
+  }
   writeFileSync(WEEKLY_PLAN_PATH, JSON.stringify(plan, null, 2));
 }
 

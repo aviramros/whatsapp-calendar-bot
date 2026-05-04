@@ -297,7 +297,15 @@ export async function sendTomorrowTasks() {
   }
 
   const tomorrow = getTomorrowISO();
-  const tasks = plan.tasks.filter(t => t.dateISO === tomorrow && t.whatsappGroup);
+  // Deduplicate in-memory as safety net for plans saved before the dedup-on-save fix
+  const seen = new Set();
+  const tasks = plan.tasks.filter(t => {
+    if (t.dateISO !== tomorrow || !t.whatsappGroup) return false;
+    const key = `${t.whatsappGroup}|${t.taskText}|${t.dateISO}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   if (tasks.length === 0) {
     log(`[Tomorrow] No tasks for ${tomorrow} — skipping reminder`);
