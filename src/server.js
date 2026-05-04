@@ -414,23 +414,24 @@ async function buildGroupReminderMessages() {
   return { messages, dayName };
 }
 
-/** Sends the approval-request preview to all manager phones. */
+/** Sends the approval-request preview to all manager phones — one message per group. */
 async function sendApprovalRequestToManagers(messages, dayName, reminderTimeStr) {
   const cfg = getConfig();
   const phones = cfg.managerApprovalPhones || [];
   if (!phones.length) { log('[ManagerApproval] No manager phones configured'); return; }
 
-  let preview = `📋 *בקשת אישור — תזכורת מחר (${dayName})*\n`;
-  preview += `ההודעות האלו תישלחנה לקבוצות ב-${reminderTimeStr}:\n\n`;
-  for (const { displayName, text } of messages) {
-    preview += `━━━ ${displayName} ━━━\n${text}\n\n`;
-  }
-  preview += `השב *אישור* לאישור ושליחה, או שלח טקסט מתוקן.`;
+  const groupNames = messages.map(m => m.displayName).join(' · ');
+  const header = `📋 *בקשת אישור — תזכורת מחר (${dayName})* — שליחה ב-${reminderTimeStr}\nקבוצות: ${groupNames}`;
+  const footer = `השב *אישור* לאישור הכל, *ביטול* לביטול.\nלתיקון קבוצה: שלח [שם קבוצה]: [משימות מתוקנות]`;
 
   for (const phone of phones) {
-    await sendWhatsAppMessage(phone, preview.trim());
+    await sendWhatsAppMessage(phone, header);
+    for (const { displayName, text } of messages) {
+      await sendWhatsAppMessage(phone, `━━━ ${displayName} ━━━\n${text}`);
+    }
+    await sendWhatsAppMessage(phone, footer);
   }
-  log(`[ManagerApproval] Preview sent to ${phones.length} manager(s)`);
+  log(`[ManagerApproval] Preview sent to ${phones.length} manager(s) — ${messages.length} group messages`);
 }
 
 /**
@@ -442,20 +443,30 @@ async function sendApprovalRequestToManagers(messages, dayName, reminderTimeStr)
  * Returns an array of { ...groupMsg, correctedText } where correctedText=null means use original.
  */
 function parseGroupCorrections(correctedText, groupMessages) {
-  // Format 1: ━━━ separator blocks (manager edited the full preview)
-  const sepPattern = /━{3}\s*(.+?)\s*━{3}/g;
-  const seps = [...correctedText.matchAll(sepPattern)];
-  if (seps.length > 0) {
-    const blocks = {};
-    for (let i = 0; i < seps.length; i++) {
-      const name = seps[i][1].trim();
-      const start = seps[i].index + seps[i][0].length;
-      const end   = i + 1 < seps.length ? seps[i + 1].index : correctedText.length;
-      blocks[name] = correctedText.slice(start, end).trim();
+  // Format 1: ━━━ separator blocks (line-based — handles missing closing ━━━)
+  const lines = correctedText.split('\n');
+  const sections = [];
+  let current = null;
+
+  for (const line of lines) {
+    // Match: ━━━ GROUP ━━━  or  ━━━ GROUP  (with or without closing ━━━)
+    const m = line.trim().match(/^━{2,}\s*(.+?)\s*━*$/);
+    if (m) {
+      if (current) sections.push(current);
+      current = { name: m[1].trim(), lines: [] };
+    } else if (current) {
+      current.lines.push(line);
     }
+  }
+  if (current) sections.push(current);
+
+  if (sections.length > 0) {
+    const blocks = {};
+    for (const { name, lines: sLines } of sections) blocks[name] = sLines.join('\n').trim();
     return groupMessages.map(g => ({
       ...g,
-      correctedText: blocks[g.displayName] ?? null,  // null = keep original
+      // key present → correctedText is string (possibly ''); absent → null (keep original)
+      correctedText: g.displayName in blocks ? blocks[g.displayName] : null,
     }));
   }
 
@@ -496,10 +507,19 @@ function deduplicateLines(text) {
  * Returns an array of plain task strings (without the bullet prefix).
  */
 function parseTasksFromCorrectedText(text) {
-  return text.split('\n')
+  const bulletLines = text.split('\n')
     .map(l => l.trim())
     .filter(l => l.startsWith('•') || l.startsWith('-'))
     .map(l => l.replace(/^[•\-]\s*/, '').trim())
+    .filter(Boolean);
+
+  if (bulletLines.length > 0) return bulletLines;
+
+  // No bullets → treat each non-empty, non-header line as a task
+  const HEADER_RE = /^(📋|⛅|☀️|🌧|🌩|🌦|❄️|━)/;
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !HEADER_RE.test(l))
     .filter(Boolean);
 }
 
@@ -584,23 +604,35 @@ async function executePendingApproval(correctedText = null) {
 
   let sent = 0, failed = 0;
   for (const { sendKey, displayName, text, pin, correctedText: ct, originalTasks, dateISO, dateLabel } of perGroup) {
-    // Deduplicate bullet lines in any corrected text before sending
-    const msgText = ct ? deduplicateLines(ct) : text;
-    const ok = await sendWhatsAppMessage(sendKey, msgText, { pin });
-    const tag = ct ? 'מתוקן' : 'מאושר';
-    log(`[ManagerApproval] ${tag} → "${displayName}" ${ok ? '✅' : '❌'}`);
-    if (ok) sent++; else failed++;
+    const newTaskTexts = ct !== null ? parseTasksFromCorrectedText(ct || '') : [];
+    let msgText;
 
-    // If manager sent corrections — update plan + calendar
-    if (ct && dateISO) {
-      const newTaskTexts = parseTasksFromCorrectedText(ct);
-      if (newTaskTexts.length > 0) {
+    if (ct === null) {
+      // Not mentioned by manager → keep original
+      msgText = text;
+    } else if (newTaskTexts.length === 0) {
+      // Explicit empty section → "no tasks" message
+      const hdr = text.split('\n')[0]; // reuse "📋 משימות — יום X DD.M:" header line
+      msgText = `${hdr}\n\nאין משימות מחר ✅`;
+      if (dateISO) {
+        updatePlanWithCorrectedTasks(displayName, [], dateISO, dateLabel);
+        if (auth && originalTasks?.length)
+          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, [], dateISO);
+      }
+    } else {
+      // Correction with actual tasks
+      msgText = deduplicateLines(ct);
+      if (dateISO) {
         updatePlanWithCorrectedTasks(displayName, newTaskTexts, dateISO, dateLabel);
-        if (auth && originalTasks?.length) {
+        if (auth && originalTasks?.length)
           await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, newTaskTexts, dateISO);
-        }
       }
     }
+
+    const ok = await sendWhatsAppMessage(sendKey, msgText, { pin });
+    const tag = ct === null ? 'מאושר' : (newTaskTexts.length === 0 ? 'ריק' : 'מתוקן');
+    log(`[ManagerApproval] ${tag} → "${displayName}" ${ok ? '✅' : '❌'}`);
+    if (ok) sent++; else failed++;
   }
   savePendingApproval({ ...pending, status: 'sent', sentAt: new Date().toISOString() });
   const dayName = pending.dayName || '';
