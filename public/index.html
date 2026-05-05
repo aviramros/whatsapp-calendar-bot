@@ -1439,6 +1439,10 @@
         <option value="pending">טרם בוצעו</option>
       </select>
       <button id="filter-clear" class="btn btn-gray" style="font-size:.8rem;padding:5px 12px" onclick="clearFilters()">✕ נקה</button>
+      <button id="bulk-delete-btn" disabled onclick="bulkDeleteSelected()"
+        style="font-size:.8rem;padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:#ef4444;cursor:pointer;opacity:.4;transition:opacity .15s">
+        🗑️ מחק מסומנים
+      </button>
     </div>
 
     <div class="excel-table-wrap">
@@ -2743,6 +2747,7 @@ function renderExcelPreview(tasks) {
   document.getElementById('dispatch-btn').disabled = willSend === 0;
   const resendAllBtn = document.getElementById('resend-all-btn');
   if (resendAllBtn) resendAllBtn.style.display = alreadySent > 0 ? '' : 'none';
+  updateBulkDeleteBtn();
 }
 
 async function resendTask(index, btn) {
@@ -3581,6 +3586,7 @@ async function toggleTaskDone(fingerprint, done, rowIdx) {
     const taskCell = row.cells[2]; // מטלה column (index 2, after checkbox + group)
     if (taskCell) taskCell.style.textDecoration = done ? 'line-through' : '';
   }
+  updateBulkDeleteBtn();
   try {
     await fetch(`${API_BASE}/tasks/toggle`, {
       method: 'POST',
@@ -3588,6 +3594,35 @@ async function toggleTaskDone(fingerprint, done, rowIdx) {
       body: JSON.stringify({ fingerprint, completed: done })
     });
   } catch {}
+}
+
+function updateBulkDeleteBtn() {
+  const btn = document.getElementById('bulk-delete-btn');
+  if (!btn) return;
+  const count = document.querySelectorAll('#excel-preview-body input[type="checkbox"]:checked').length;
+  btn.disabled = count === 0;
+  btn.textContent = count > 0 ? `🗑️ מחק מסומנים (${count})` : '🗑️ מחק מסומנים';
+  btn.style.opacity = count > 0 ? '1' : '.4';
+}
+
+async function bulkDeleteSelected() {
+  const checked = [...document.querySelectorAll('#excel-preview-body input[type="checkbox"]:checked')];
+  if (!checked.length) return;
+  // Extract original task indices from parent <tr id="task-row-N">
+  const indices = checked
+    .map(cb => cb.closest('tr')?.id?.match(/task-row-(\d+)/)?.[1])
+    .filter(Boolean)
+    .map(Number)
+    .sort((a, b) => b - a); // reverse so splice doesn't shift indices
+  if (!confirm(`למחוק ${indices.length} משימ${indices.length === 1 ? 'ה' : 'ות'} מסומנ${indices.length === 1 ? 'ת' : 'ות'}?`)) return;
+  for (const idx of indices) {
+    if (excelParsedTasks[idx]) excelParsedTasks.splice(idx, 1);
+  }
+  const weekLabel = document.getElementById('excel-week-label')?.textContent?.trim() || '';
+  await savePlanToServer(weekLabel, excelParsedTasks);
+  populateFilters(excelParsedTasks);
+  renderExcelPreview(excelParsedTasks);
+  toast(`${indices.length} משימות נמחקו`, 'success');
 }
 
 // ── Dark mode ─────────────────────────────────────────────────────────────────
