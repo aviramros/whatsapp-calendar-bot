@@ -401,8 +401,18 @@ function formatDraftText(tasks, dayName, dateLabel, isUpdate = false) {
   const hdr = isUpdate
     ? 'טיוטה מעודכנת:'
     : `טיוטת משימות מחר — ${dayName} ${dateLabel}:`;
-  const lines = tasks.map(t => `${numEmoji(t.displayNumber)} ${t.group} — ${t.text}`).join('\n');
-  return `${hdr}\n\n${lines}\n\nמה תרצה לעשות?`;
+  // Group tasks visually — blank line between different groups, bold group header
+  const lines = [];
+  let lastGroup = null;
+  for (const t of tasks) {
+    if (t.group !== lastGroup) {
+      if (lastGroup !== null) lines.push(''); // blank separator
+      lines.push(`*${t.group}*`);
+      lastGroup = t.group;
+    }
+    lines.push(`${numEmoji(t.displayNumber)} ${t.text}`);
+  }
+  return `${hdr}\n\n${lines.join('\n')}\n\nמה תרצה לעשות?`;
 }
 
 async function dispatchDraft(phone, pending, isUpdate = false) {
