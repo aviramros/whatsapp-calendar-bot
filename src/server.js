@@ -386,6 +386,9 @@ export async function autoDispatchWeeklyPlan() {
 
 // ─── Manager approval (state machine) ────────────────────────────────────────
 
+const NUM_EMOJI = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+function numEmoji(n) { return NUM_EMOJI[n] ?? String(n); }
+
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -398,7 +401,7 @@ function formatDraftText(tasks, dayName, dateLabel, isUpdate = false) {
   const hdr = isUpdate
     ? 'טיוטה מעודכנת:'
     : `טיוטת משימות מחר — ${dayName} ${dateLabel}:`;
-  const lines = tasks.map(t => `${t.displayNumber}. ${t.group} — ${t.text}`).join('\n');
+  const lines = tasks.map(t => `${numEmoji(t.displayNumber)} ${t.group} — ${t.text}`).join('\n');
   return `${hdr}\n\n${lines}\n\nמה תרצה לעשות?`;
 }
 
@@ -417,7 +420,7 @@ async function dispatchDraft(phone, pending, isUpdate = false) {
       { id: 'edit',    body: '✏️ ערוך' },
       { id: 'cancel',  body: '❌ בטל' },
     ],
-    '1=אשר | 2=ערוך | 3=בטל'
+    '1️⃣=אשר | 2️⃣=ערוך | 3️⃣=בטל'
   );
 }
 
@@ -430,7 +433,7 @@ async function dispatchEditMenu(phone) {
       { id: 'edit_task', body: '✏️ עריכה' },
       { id: 'add',       body: '➕ הוספה' },
     ],
-    '1=מחיקה | 2=עריכה | 3=הוספה | 0=חזרה'
+    '1️⃣=מחיקה | 2️⃣=עריכה | 3️⃣=הוספה | 0️⃣=חזרה'
   );
 }
 
@@ -444,16 +447,16 @@ async function dispatchGroupSelector(phone, pending) {
     }
   }
   const buttons = uniqueGroups.slice(0, 3).map(task => ({ id: task.sendKey, body: task.group }));
-  const footer = uniqueGroups.map((task, i) => `${i + 1}=${task.group}`).join(' | ') + ' | 0=חזרה';
+  const footer = uniqueGroups.map((task, i) => `${numEmoji(i + 1)}=${task.group}`).join(' | ') + ' | 0️⃣=חזרה';
   await sendWhatsAppButtons(phone, 'לאיזו קבוצה להוסיף משימה?', buttons, footer);
 }
 
 async function dispatchTaskSelector(phone, pending, action) {
   const newState = action === 'delete' ? 'delete_waiting_num' : 'edit_waiting_num';
   savePendingApproval({ ...pending, state: newState });
-  const list = pending.tasks.map(task => `${task.displayNumber}. ${task.group} — ${task.text}`).join('\n');
+  const list = pending.tasks.map(task => `${numEmoji(task.displayNumber)} ${task.group} — ${task.text}`).join('\n');
   const question = action === 'delete' ? 'איזו משימה למחוק?' : 'איזו משימה לערוך?';
-  await sendWhatsAppMessage(phone, `${question}\n\n${list}\n\nשלח מספר, או 0 לחזרה.`);
+  await sendWhatsAppMessage(phone, `${question}\n\n${list}\n\nשלח מספר, או 0️⃣ לחזרה.`);
 }
 
 async function handleApprovalMessage(body, pending, phone) {
