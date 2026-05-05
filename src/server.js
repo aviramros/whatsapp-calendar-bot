@@ -387,7 +387,7 @@ export async function autoDispatchWeeklyPlan() {
 // ─── Manager approval (state machine) ────────────────────────────────────────
 
 const NUM_EMOJI = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
-function numEmoji(n) { return NUM_EMOJI[n] ?? String(n); }
+function numEmoji(n) { return String(n).split('').map(d => NUM_EMOJI[+d]).join(''); }
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
