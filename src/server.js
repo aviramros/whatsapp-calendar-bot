@@ -490,8 +490,13 @@ function parseGroupCorrections(correctedText, groupMessages) {
     }
   }
 
-  // Format 3: plain text → all groups get the same correction
-  return groupMessages.map(g => ({ ...g, correctedText }));
+  // Format 3: plain text → only safe when there's exactly one group
+  // (with multiple groups, plain text without a prefix would wrongly overwrite all)
+  if (groupMessages.length === 1) {
+    return groupMessages.map(g => ({ ...g, correctedText }));
+  }
+  log('[ManagerApproval] Multi-group correction with no group separator — keeping originals. Use [שם קבוצה]: [משימות] format.');
+  return groupMessages.map(g => ({ ...g, correctedText: null }));
 }
 
 /**
@@ -537,12 +542,17 @@ function parseTasksFromCorrectedText(text) {
  */
 function updatePlanWithCorrectedTasks(displayName, correctedTaskTexts, dateISO, dateLabel) {
   const plan = getWeeklyPlan();
-  if (!plan?.tasks) return;
+  if (!plan?.tasks) return { removedTasks: [] };
 
-  // Remove existing tasks for this group+date
-  const kept = plan.tasks.filter(t =>
-    !(t.whatsappGroup === displayName && t.dateISO === dateISO)
-  );
+  // Remove existing tasks for this group+date and collect what was removed
+  const removedTasks = [];
+  const kept = plan.tasks.filter(t => {
+    if (t.whatsappGroup === displayName && t.dateISO === dateISO) {
+      removedTasks.push(t.taskText);
+      return false;
+    }
+    return true;
+  });
 
   // Build new task entries from corrected text
   const newTasks = correctedTaskTexts.map(text => ({
@@ -562,6 +572,7 @@ function updatePlanWithCorrectedTasks(displayName, correctedTaskTexts, dateISO, 
   saveWeeklyPlan({ ...plan, tasks: merged, savedAt: new Date().toISOString() });
   log(`[ManagerApproval] Plan updated for "${displayName}" on ${dateISO}: ${newTasks.length} tasks`);
   broadcast('weeklyPlanUpdated', { groupName: displayName, dateISO, taskCount: newTasks.length });
+  return { removedTasks };
 }
 
 /**
@@ -641,17 +652,17 @@ async function executePendingApproval(correctedText = null) {
       const hdr = text.split('\n')[0]; // reuse "📋 משימות — יום X DD.M:" header line
       msgText = `${hdr}\n\nאין משימות מחר ✅`;
       if (effectiveDateISO) {
-        updatePlanWithCorrectedTasks(displayName, [], effectiveDateISO, dateLabel);
-        if (auth && originalTasks?.length)
-          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, [], effectiveDateISO);
+        const { removedTasks } = updatePlanWithCorrectedTasks(displayName, [], effectiveDateISO, dateLabel);
+        if (auth && removedTasks.length)
+          await syncCorrectedTasksToCalendar(auth, displayName, removedTasks, [], effectiveDateISO);
       }
     } else {
       // Correction with actual tasks
       msgText = deduplicateLines(ct);
       if (effectiveDateISO) {
-        updatePlanWithCorrectedTasks(displayName, newTaskTexts, effectiveDateISO, dateLabel);
-        if (auth && originalTasks?.length)
-          await syncCorrectedTasksToCalendar(auth, displayName, originalTasks, newTaskTexts, effectiveDateISO);
+        const { removedTasks } = updatePlanWithCorrectedTasks(displayName, newTaskTexts, effectiveDateISO, dateLabel);
+        if (auth && removedTasks.length)
+          await syncCorrectedTasksToCalendar(auth, displayName, removedTasks, newTaskTexts, effectiveDateISO);
       }
     }
 
@@ -1763,9 +1774,25 @@ app.get('*', (req, res) => {
 // ─── Manager approval — reply listener ───────────────────────────────────────
 whatsappEvents.on('managerDirectMessage', async ({ body, senderPhone }) => {
   const pending = getPendingApproval();
-  if (!pending || pending.status !== 'pending') return;
+  if (!pending) return;
 
   const trimmed = body.trim();
+
+  // Allow Format-2 corrections ("GROUP: text") even after the approval was already sent
+  if (pending.status === 'sent') {
+    const isGroupCorrection = (pending.groupMessages || []).some(g => trimmed.startsWith(g.displayName + ':'));
+    if (isGroupCorrection) {
+      log(`[ManagerApproval] Post-send correction from ${senderPhone} — reopening and applying`);
+      savePendingApproval({ ...pending, status: 'pending' });
+      await executePendingApproval(trimmed);
+    } else {
+      log(`[ManagerApproval] Post-send message from ${senderPhone} ignored (use [שם קבוצה]: [משימות] to correct)`);
+    }
+    return;
+  }
+
+  if (pending.status !== 'pending') return;
+
   const isApproval = /^(אישור|אשר|ok|כן|approve)$/i.test(trimmed);
   const isCancel   = /^(ביטול|בטל|לא|no|cancel)$/i.test(trimmed);
 
