@@ -2579,10 +2579,14 @@ function renderGroupMapTable(groups) {
       <td><select id="bdikot-select" data-excel-group="בדיקות"
             onchange="const b=document.getElementById('send-tmrw-bdikot');b.style.opacity=this.value?'1':'0.4'"
             style="${selectStyle}">${testOpts}</select></td>
-      <td style="padding-right:8px;white-space:nowrap">
+      <td style="padding-right:8px;white-space:nowrap;display:flex;gap:6px;align-items:center">
         <button id="send-tmrw-bdikot" onclick="sendTomorrowBdikot(this)"
           style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;opacity:${testCurrent?'1':'0.4'}">
           📤 שלח למחר
+        </button>
+        <button id="send-approval-bdikot" onclick="sendManagerApprovalTest(this)"
+          style="padding:5px 10px;font-size:.8rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">
+          📋 שלח לאישור מנהל
         </button>
       </td>
     </tr>`;
@@ -2623,6 +2627,28 @@ function sendTomorrowBdikot(btn) {
   const entry = waGroupsList.find(wg => wg.id === sel.value);
   const name = entry?.name || sel.value;
   sendTomorrowToGroup(sel.value, name, btn);
+}
+
+async function sendManagerApprovalTest(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳...';
+  try {
+    const res = await fetch(`${API_BASE}/manager-approval/send-draft`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      btn.textContent = `✅ נשלח (${data.tasks} משימות)`;
+      toast(`טיוטת אישור נשלחה ל-${data.phones} מנהל/ים`, 'success');
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 4000);
+    } else {
+      btn.textContent = '❌ נכשל';
+      toast(data.error || 'שגיאה בשליחה', 'error');
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+    }
+  } catch (e) {
+    btn.textContent = '❌ שגיאה';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 3000);
+  }
 }
 
 async function saveGroupMap() {

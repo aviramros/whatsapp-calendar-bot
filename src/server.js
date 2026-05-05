@@ -1830,6 +1830,23 @@ app.post('/excel/weekly-summary', async (req, res) => {
   }
 });
 
+// Manual trigger for manager approval draft — sends the numbered task list + buttons to manager phones
+app.post('/manager-approval/send-draft', async (req, res) => {
+  const cfg = getConfig();
+  if (!cfg.managerApprovalEnabled) return res.json({ ok: false, error: 'אישור מנהל לא מופעל — הפעל בהגדרות' });
+  if (!(cfg.managerApprovalPhones || []).length) return res.json({ ok: false, error: 'לא הוגדרו טלפוני מנהל בהגדרות' });
+  try {
+    await managerApprovalPreSendJob();
+    const pending = getPendingApproval();
+    const count = pending?.tasks?.length || 0;
+    if (count === 0) return res.json({ ok: false, error: 'אין משימות למחר בתכנית השבועית' });
+    res.json({ ok: true, tasks: count, phones: (cfg.managerApprovalPhones || []).length });
+  } catch (e) {
+    log('[ManagerApproval] Manual draft trigger error: ' + e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ─── SPA catch-all — must be last route ──────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(join(__dirname, '../public/index.html'));
