@@ -453,21 +453,8 @@ export async function sendWhatsAppButtons(recipient, bodyText, buttons, footerTe
       }
     }
   }
-  try {
-    const { Buttons } = pkg;
-    if (!Buttons) throw new Error('Buttons class not available in whatsapp-web.js');
-    const btns = new Buttons(
-      bodyText,
-      buttons.map(b => ({ body: b.body, id: b.id })),
-      null,
-      footerText || undefined
-    );
-    await client.sendMessage(chatId, btns);
-    log(`Buttons sent to ${recipient}`);
-    return true;
-  } catch (err) {
-    log(`Buttons failed (${err.message}) — falling back to plain text`);
-    const fallback = footerText ? `${bodyText}\n\n${footerText}` : bodyText;
-    return sendWhatsAppMessage(recipient, fallback);
-  }
+  // WhatsApp deprecated interactive buttons for non-Business accounts.
+  // Send plain text with footer showing numeric shortcuts.
+  const fallback = footerText ? `${bodyText}\n\n${footerText}` : bodyText;
+  return sendWhatsAppMessage(recipient, fallback);
 }
