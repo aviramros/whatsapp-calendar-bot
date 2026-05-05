@@ -31,7 +31,7 @@ import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import QRCode from 'qrcode';
 
-import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory, buildGroupCache } from './whatsapp.js';
+import { initWhatsApp, whatsappEvents, getStatus, getCurrentQr, fetchRecentMessages, sendWhatsAppMessage, sendWhatsAppButtons, stopWhatsApp, startWhatsApp, isBotEnabled, getBotPhoneNumber, getAvailableGroups, getGroupsWithDetails, getRecentMessagesFromHistory, buildGroupCache } from './whatsapp.js';
 import { parseMessage } from './parser.js';
 import { EventState } from './state.js';
 import { getConfig, saveConfig, getGroupMap, saveGroupMap, getWeeklyPlan, saveWeeklyPlan, getCompletedTasks, saveCompletedTasks, getExcelPreview, saveExcelPreview, getPendingExcel, savePendingExcel, getPendingApproval, savePendingApproval } from './config.js';
@@ -384,320 +384,379 @@ export async function autoDispatchWeeklyPlan() {
   broadcast('syncComplete', { created: [], skipped: [], errors: [], autoDispatch: true });
 }
 
-// ─── Manager approval helpers ─────────────────────────────────────────────────
+// ─── Manager approval (state machine) ────────────────────────────────────────
 
-/** Builds the group-keyed reminder messages for tomorrow without sending them. */
-async function buildGroupReminderMessages() {
-  const plan = getWeeklyPlan();
-  if (!plan?.tasks?.length) return null;
-  const tomorrow = getTomorrowISO();
-  const tasks = plan.tasks.filter(t => t.dateISO === tomorrow && t.whatsappGroup);
-  if (!tasks.length) return null;
-
-  const byGroup = {};
-  for (const t of tasks) {
-    const key = t.whatsappGroupId || t.whatsappGroup;
-    (byGroup[key] = byGroup[key] || { sendKey: key, displayName: t.whatsappGroup, tasks: [] }).tasks.push(t);
-  }
-  const weather = await fetchWeatherForDate(tomorrow);
-  const dayName = getHebrewDayName(tomorrow);
-  const config  = getConfig();
-
-  const messages = [];
-  for (const { sendKey, displayName, tasks: groupTasks } of Object.values(byGroup)) {
-    let msg = `📋 משימות — ${dayName} ${groupTasks[0].dateLabel}:\n\n`;
-    groupTasks.forEach(t => { msg += `• ${t.taskText}\n`; });
-    if (weather) msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
-    messages.push({
-      sendKey,
-      displayName,
-      text: msg.trim(),
-      pin: config.pinMessages === true,
-      // stored so executePendingApproval can update plan + calendar on correction
-      originalTasks: groupTasks.map(t => t.taskText),
-      dateISO: tomorrow,
-      dateLabel: groupTasks[0].dateLabel,
-    });
-  }
-  return { messages, dayName };
+function generateId() {
+  return Math.random().toString(36).slice(2, 10);
 }
 
-/** Sends the approval-request preview to all manager phones — one message per group. */
-async function sendApprovalRequestToManagers(messages, dayName, reminderTimeStr) {
-  const cfg = getConfig();
-  const phones = cfg.managerApprovalPhones || [];
-  if (!phones.length) { log('[ManagerApproval] No manager phones configured'); return; }
-
-  const groupNames = messages.map(m => m.displayName).join(' · ');
-  const header = `📋 *בקשת אישור — תזכורת מחר (${dayName})* — שליחה ב-${reminderTimeStr}\nקבוצות: ${groupNames}`;
-  const footer = `השב *אישור* לאישור הכל, *ביטול* לביטול.\nלתיקון קבוצה: שלח [שם קבוצה]: [משימות מתוקנות]`;
-
-  for (const phone of phones) {
-    await sendWhatsAppMessage(phone, header);
-    for (const { displayName, text } of messages) {
-      await sendWhatsAppMessage(phone, `━━━ ${displayName} ━━━\n${text}`);
-    }
-    await sendWhatsAppMessage(phone, footer);
-  }
-  log(`[ManagerApproval] Preview sent to ${phones.length} manager(s) — ${messages.length} group messages`);
+function reassignDisplayNumbers(tasks) {
+  tasks.forEach((t, i) => { t.displayNumber = i + 1; });
 }
 
-/**
- * Parses a manager's correction reply and maps it to individual group messages.
- * Supports two formats:
- *   1. Sections delimited by ━━━ GROUP ━━━ (manager edited the preview)
- *   2. Single prefix "GROUP_NAME: corrected text" (applies to one group, others keep original)
- *   3. Plain text — applied to all groups
- * Returns an array of { ...groupMsg, correctedText } where correctedText=null means use original.
- */
-function parseGroupCorrections(correctedText, groupMessages) {
-  // Format 1: ━━━ separator blocks (line-based — handles missing closing ━━━)
-  const lines = correctedText.split('\n');
-  const sections = [];
-  let current = null;
-
-  for (const line of lines) {
-    // Match: ━━━ GROUP ━━━  or  ━━━ GROUP  (with or without closing ━━━)
-    const m = line.trim().match(/^━{2,}\s*(.+?)\s*━*$/);
-    if (m) {
-      if (current) sections.push(current);
-      current = { name: m[1].trim(), lines: [] };
-    } else if (current) {
-      current.lines.push(line);
-    }
-  }
-  if (current) sections.push(current);
-
-  if (sections.length > 0) {
-    const blocks = {};
-    for (const { name, lines: sLines } of sections) blocks[name] = sLines.join('\n').trim();
-    return groupMessages.map(g => ({
-      ...g,
-      // key present → correctedText is string (possibly ''); absent → null (keep original)
-      correctedText: g.displayName in blocks ? blocks[g.displayName] : null,
-    }));
-  }
-
-  // Format 2: "GROUP_NAME: ..." — applies to one group only
-  for (const g of groupMessages) {
-    const prefix = g.displayName + ':';
-    if (correctedText.startsWith(prefix)) {
-      const text = correctedText.slice(prefix.length).trim();
-      return groupMessages.map(m => ({
-        ...m,
-        correctedText: m.displayName === g.displayName ? text : null,
-      }));
-    }
-  }
-
-  // Format 3: plain text → only safe when there's exactly one group
-  // (with multiple groups, plain text without a prefix would wrongly overwrite all)
-  if (groupMessages.length === 1) {
-    return groupMessages.map(g => ({ ...g, correctedText }));
-  }
-  log('[ManagerApproval] Multi-group correction with no group separator — keeping originals. Use [שם קבוצה]: [משימות] format.');
-  return groupMessages.map(g => ({ ...g, correctedText: null }));
+function formatDraftText(tasks, dayName, dateLabel, isUpdate = false) {
+  const hdr = isUpdate
+    ? 'טיוטה מעודכנת:'
+    : `טיוטת משימות מחר — ${dayName} ${dateLabel}:`;
+  const lines = tasks.map(t => `${t.displayNumber}. ${t.group} — ${t.text}`).join('\n');
+  return `${hdr}\n\n${lines}\n\nמה תרצה לעשות?`;
 }
 
-/**
- * Removes duplicate bullet lines (lines starting with •) from a message block.
- * Preserves order and keeps the first occurrence of each unique line.
- * Non-bullet lines (header, weather) are preserved as-is.
- */
-function deduplicateLines(text) {
-  const seen = new Set();
-  return text.split('\n').filter(line => {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('•')) return true; // keep non-bullet lines
-    if (seen.has(trimmed)) return false;
-    seen.add(trimmed);
-    return true;
-  }).join('\n');
-}
-
-/**
- * Extracts task text lines from a corrected message (lines starting with • or -).
- * Returns an array of plain task strings (without the bullet prefix).
- */
-function parseTasksFromCorrectedText(text) {
-  const bulletLines = text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.startsWith('•') || l.startsWith('-'))
-    .map(l => l.replace(/^[•\-]\s*/, '').trim())
-    .filter(Boolean);
-
-  if (bulletLines.length > 0) return bulletLines;
-
-  // No bullets → treat each non-empty, non-header line as a task
-  const HEADER_RE = /^(📋|⛅|☀️|🌧|🌩|🌦|❄️|━)/;
-  return text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !HEADER_RE.test(l))
-    .filter(Boolean);
-}
-
-/**
- * Updates the weekly plan: replaces tasks for the given group+date with the corrected list.
- * Preserves other groups and other dates.
- */
-function updatePlanWithCorrectedTasks(displayName, correctedTaskTexts, dateISO, dateLabel) {
-  const plan = getWeeklyPlan();
-  if (!plan?.tasks) return { removedTasks: [] };
-
-  // Remove existing tasks for this group+date and collect what was removed
-  const removedTasks = [];
-  const kept = plan.tasks.filter(t => {
-    if (t.whatsappGroup === displayName && t.dateISO === dateISO) {
-      removedTasks.push(t.taskText);
-      return false;
-    }
-    return true;
-  });
-
-  // Build new task entries from corrected text
-  const newTasks = correctedTaskTexts.map(text => ({
-    taskText: text,
-    whatsappGroup: displayName,
-    dateISO,
-    dateLabel: dateLabel || dateISO,
-    fingerprint: `${displayName}|${text}|${dateISO}`,
-    willSend: true,
-  }));
-
-  // Insert new tasks sorted by dateISO
-  const merged = [...kept, ...newTasks].sort((a, b) =>
-    (a.dateISO || '') < (b.dateISO || '') ? -1 : 1
+async function dispatchDraft(phone, pending, isUpdate = false) {
+  const firstTask = pending.tasks[0];
+  const text = formatDraftText(
+    pending.tasks,
+    pending.dayName,
+    firstTask?.dateLabel || pending.dateISO || '',
+    isUpdate
   );
-
-  saveWeeklyPlan({ ...plan, tasks: merged, savedAt: new Date().toISOString() });
-  log(`[ManagerApproval] Plan updated for "${displayName}" on ${dateISO}: ${newTasks.length} tasks`);
-  broadcast('weeklyPlanUpdated', { groupName: displayName, dateISO, taskCount: newTasks.length });
-  return { removedTasks };
+  await sendWhatsAppButtons(
+    phone, text,
+    [
+      { id: 'approve', body: '✅ אשר ושלח' },
+      { id: 'edit',    body: '✏️ ערוך' },
+      { id: 'cancel',  body: '❌ בטל' },
+    ],
+    '1=אשר | 2=ערוך | 3=בטל'
+  );
 }
 
-/**
- * Syncs Google Calendar for a group: deletes old task events, creates new ones.
- */
-async function syncCorrectedTasksToCalendar(auth, displayName, oldTaskTexts, newTaskTexts, dateISO) {
-  try {
-    const calendarIds = await resolveCalendarIds(auth);
-    const calId = await getOrCreateCalendar(auth, displayName, calendarIds);
-    if (!calId) {
-      log(`[ManagerApproval] No calendar mapped for "${displayName}" — skipping calendar sync`);
-      return;
+async function dispatchEditMenu(phone) {
+  await sendWhatsAppButtons(
+    phone,
+    'מה תרצה לעדכן?',
+    [
+      { id: 'delete',    body: '🗑️ מחיקה' },
+      { id: 'edit_task', body: '✏️ עריכה' },
+      { id: 'add',       body: '➕ הוספה' },
+    ],
+    '1=מחיקה | 2=עריכה | 3=הוספה | 0=חזרה'
+  );
+}
+
+async function dispatchGroupSelector(phone, pending) {
+  const seen = new Set();
+  const uniqueGroups = [];
+  for (const task of pending.tasks) {
+    if (!seen.has(task.sendKey)) {
+      seen.add(task.sendKey);
+      uniqueGroups.push(task);
+    }
+  }
+  const buttons = uniqueGroups.slice(0, 3).map(task => ({ id: task.sendKey, body: task.group }));
+  const footer = uniqueGroups.map((task, i) => `${i + 1}=${task.group}`).join(' | ') + ' | 0=חזרה';
+  await sendWhatsAppButtons(phone, 'לאיזו קבוצה להוסיף משימה?', buttons, footer);
+}
+
+async function dispatchTaskSelector(phone, pending, action) {
+  const newState = action === 'delete' ? 'delete_waiting_num' : 'edit_waiting_num';
+  savePendingApproval({ ...pending, state: newState });
+  const list = pending.tasks.map(task => `${task.displayNumber}. ${task.group} — ${task.text}`).join('\n');
+  const question = action === 'delete' ? 'איזו משימה למחוק?' : 'איזו משימה לערוך?';
+  await sendWhatsAppMessage(phone, `${question}\n\n${list}\n\nשלח מספר, או 0 לחזרה.`);
+}
+
+async function handleApprovalMessage(body, pending, phone) {
+  const t = body.trim();
+  const isBack = ['back', '0'].includes(t.toLowerCase()) || /^חזרה?$/i.test(t);
+
+  switch (pending.state || 'draft_review') {
+
+    case 'draft_review': {
+      if (['approve', '1'].includes(t.toLowerCase()) || /^(אישור|אשר|ok|כן|approve)$/i.test(t)) {
+        savePendingApproval({ ...pending, status: 'approved', state: 'draft_review' });
+        const rh = String(getConfig().groupRemindersHour ?? 7).padStart(2, '0');
+        const rm = String(getConfig().groupRemindersMinute ?? 0).padStart(2, '0');
+        await sendWhatsAppMessage(phone, `אושר ✅\nהמשימות יישלחו לקבוצות בשעה ${rh}:${rm}.`);
+        log(`[ManagerApproval] Approved by ${phone}`);
+      } else if (['edit', '2'].includes(t.toLowerCase()) || /^(עדכן|ערוך|edit)$/i.test(t)) {
+        savePendingApproval({ ...pending, state: 'edit_menu' });
+        await dispatchEditMenu(phone);
+      } else if (['cancel', '3'].includes(t.toLowerCase()) || /^(ביטול|בטל|לא|no|cancel)$/i.test(t)) {
+        savePendingApproval({ ...pending, status: 'cancelled' });
+        await sendWhatsAppMessage(phone, 'השליחה להיום בוטלה ❌');
+        log(`[ManagerApproval] Cancelled by ${phone}`);
+      } else {
+        await dispatchDraft(phone, pending); // re-show on unrecognised input
+      }
+      break;
     }
 
-    // Delete old tasks
-    for (const title of oldTaskTexts) {
-      const deleted = await deleteAllDayEvent(auth, calId, title, dateISO);
-      if (deleted > 0) log(`[ManagerApproval] Calendar: deleted "${title}" from "${displayName}" on ${dateISO}`);
+    case 'edit_menu': {
+      if (['delete', '1'].includes(t.toLowerCase())) {
+        await dispatchTaskSelector(phone, pending, 'delete');
+      } else if (['edit_task', '2'].includes(t.toLowerCase())) {
+        await dispatchTaskSelector(phone, pending, 'edit');
+      } else if (['add', '3'].includes(t.toLowerCase())) {
+        savePendingApproval({ ...pending, state: 'add_waiting_group' });
+        await dispatchGroupSelector(phone, pending);
+      } else if (isBack) {
+        savePendingApproval({ ...pending, state: 'draft_review' });
+        await dispatchDraft(phone, pending);
+      } else {
+        await dispatchEditMenu(phone);
+      }
+      break;
     }
 
-    // Create new tasks
-    for (const title of newTaskTexts) {
-      const created = await createAllDayEvent(auth, calId, title, dateISO);
-      log(`[ManagerApproval] Calendar: ${created ? 'created' : 'skipped (exists)'} "${title}" in "${displayName}" on ${dateISO}`);
+    case 'delete_waiting_num': {
+      if (isBack) {
+        savePendingApproval({ ...pending, state: 'edit_menu' });
+        await dispatchEditMenu(phone);
+        break;
+      }
+      const delNum = parseInt(t);
+      const delTask = pending.tasks.find(task => task.displayNumber === delNum);
+      if (!delTask) {
+        await sendWhatsAppMessage(phone, `לא מצאתי משימה ${delNum}.\nבחר מספר מהרשימה.`);
+        break;
+      }
+      const afterDelete = pending.tasks.filter(task => task.id !== delTask.id);
+      reassignDisplayNumbers(afterDelete);
+      const updAfterDelete = { ...pending, tasks: afterDelete, state: 'draft_review' };
+      savePendingApproval(updAfterDelete);
+      await sendWhatsAppMessage(phone, `משימה ${delNum} נמחקה ✅`);
+      await dispatchDraft(phone, updAfterDelete, true);
+      break;
     }
-  } catch (err) {
-    log(`[ManagerApproval] Calendar sync error for "${displayName}": ${err.message}`);
+
+    case 'edit_waiting_num': {
+      if (isBack) {
+        savePendingApproval({ ...pending, state: 'edit_menu' });
+        await dispatchEditMenu(phone);
+        break;
+      }
+      const editNum = parseInt(t);
+      const editTask = pending.tasks.find(task => task.displayNumber === editNum);
+      if (!editTask) {
+        await sendWhatsAppMessage(phone, `לא מצאתי משימה ${editNum}.\nבחר מספר מהרשימה.`);
+        break;
+      }
+      savePendingApproval({ ...pending, state: 'edit_waiting_text', selectedTaskId: editTask.id });
+      await sendWhatsAppMessage(phone, `שלח את הטקסט החדש למשימה ${editNum}:`);
+      break;
+    }
+
+    case 'edit_waiting_text': {
+      if (!t) {
+        await sendWhatsAppMessage(phone, 'המשימה ריקה. שלח טקסט, או 0 לחזרה.');
+        break;
+      }
+      if (isBack) {
+        savePendingApproval({ ...pending, state: 'edit_menu', selectedTaskId: null });
+        await dispatchEditMenu(phone);
+        break;
+      }
+      const editIdx = pending.tasks.findIndex(task => task.id === pending.selectedTaskId);
+      if (editIdx < 0) {
+        savePendingApproval({ ...pending, state: 'edit_menu' });
+        await dispatchEditMenu(phone);
+        break;
+      }
+      const oldNum = pending.tasks[editIdx].displayNumber;
+      const editedTasks = [...pending.tasks];
+      editedTasks[editIdx] = { ...editedTasks[editIdx], text: t };
+      const updAfterEdit = { ...pending, tasks: editedTasks, state: 'draft_review', selectedTaskId: null };
+      savePendingApproval(updAfterEdit);
+      await sendWhatsAppMessage(phone, `משימה ${oldNum} עודכנה ✅`);
+      await dispatchDraft(phone, updAfterEdit, true);
+      break;
+    }
+
+    case 'add_waiting_group': {
+      if (isBack) {
+        savePendingApproval({ ...pending, state: 'edit_menu' });
+        await dispatchEditMenu(phone);
+        break;
+      }
+      const seenGroups = new Set();
+      const uniqueGroups = [];
+      for (const task of pending.tasks) {
+        if (!seenGroups.has(task.sendKey)) { seenGroups.add(task.sendKey); uniqueGroups.push(task); }
+      }
+      const grpNum = parseInt(t);
+      const selGroup = uniqueGroups.find(g => g.group === t || g.sendKey === t)
+        || (grpNum >= 1 && grpNum <= uniqueGroups.length ? uniqueGroups[grpNum - 1] : null);
+      if (!selGroup) {
+        await sendWhatsAppMessage(phone, 'לא הבנתי. שלח מספר או לחץ כפתור.');
+        break;
+      }
+      savePendingApproval({ ...pending, state: 'add_waiting_text', selectedGroup: selGroup.group, selectedSendKey: selGroup.sendKey });
+      await sendWhatsAppMessage(phone, `שלח את המשימה החדשה עבור ${selGroup.group}:`);
+      break;
+    }
+
+    case 'add_waiting_text': {
+      if (!t) {
+        await sendWhatsAppMessage(phone, 'המשימה ריקה. שלח טקסט, או 0 לחזרה.');
+        break;
+      }
+      if (isBack) {
+        savePendingApproval({ ...pending, state: 'add_waiting_group', selectedGroup: null, selectedSendKey: null });
+        await dispatchGroupSelector(phone, pending);
+        break;
+      }
+      const refTask = pending.tasks.find(task => task.sendKey === pending.selectedSendKey) || pending.tasks[0];
+      const newTask = {
+        id:            generateId(),
+        group:         pending.selectedGroup,
+        sendKey:       pending.selectedSendKey,
+        text:          t,
+        dateISO:       refTask?.dateISO || pending.dateISO,
+        dateLabel:     refTask?.dateLabel || '',
+        displayNumber: pending.tasks.length + 1, // will be overwritten by reassign
+      };
+      const tasksWithNew = [...pending.tasks, newTask];
+      reassignDisplayNumbers(tasksWithNew);
+      const updAfterAdd = { ...pending, tasks: tasksWithNew, state: 'draft_review', selectedGroup: null, selectedSendKey: null };
+      savePendingApproval(updAfterAdd);
+      await sendWhatsAppMessage(phone, `המשימה נוספה ל${pending.selectedGroup} ✅`);
+      await dispatchDraft(phone, updAfterAdd, true);
+      break;
+    }
+
+    default: {
+      // Unknown state — reset to draft_review
+      savePendingApproval({ ...pending, state: 'draft_review' });
+      await dispatchDraft(phone, pending);
+      break;
+    }
   }
 }
 
-/** Executes the pending approval — sends originals or per-group corrections. */
-async function executePendingApproval(correctedText = null) {
-  const pending = getPendingApproval();
-  if (!pending || pending.status !== 'pending') {
-    log('[ManagerApproval] No pending approval to execute');
-    return;
-  }
+/** Sends approved tasks to each group, then syncs plan + calendar. */
+async function finalizeApproval(pending) {
+  const config = getConfig();
+  const weather = await fetchWeatherForDate(pending.dateISO);
 
-  const perGroup = correctedText
-    ? parseGroupCorrections(correctedText, pending.groupMessages)
-    : pending.groupMessages.map(g => ({ ...g, correctedText: null }));
-
-  // Get Google auth once (needed for calendar sync)
-  let auth = null;
-  if (correctedText) {
-    try { auth = await getAuthenticatedClient(); } catch (_) {}
+  // Group tasks by sendKey
+  const byGroup = new Map();
+  for (const task of pending.tasks) {
+    if (!byGroup.has(task.sendKey)) {
+      byGroup.set(task.sendKey, { sendKey: task.sendKey, group: task.group, dateLabel: task.dateLabel, tasks: [] });
+    }
+    byGroup.get(task.sendKey).tasks.push(task);
   }
 
   let sent = 0, failed = 0;
-  for (const { sendKey, displayName, text, pin, correctedText: ct, originalTasks, dateISO, dateLabel } of perGroup) {
-    const newTaskTexts = ct !== null ? parseTasksFromCorrectedText(ct || '') : [];
-    let msgText;
-
-    // Fallback for old pending-approval.json saved without per-group dateISO:
-    // parse from message header "5.5:" → "2026-05-05", or createdAt+1day
-    const effectiveDateISO = dateISO || (() => {
-      const m = (text || '').match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?[:\s]/);
-      if (m) {
-        const day = String(parseInt(m[1])).padStart(2, '0');
-        const month = String(parseInt(m[2])).padStart(2, '0');
-        const year = m[3] ? m[3] : String(new Date(pending.createdAt || Date.now()).getFullYear());
-        return `${year}-${month}-${day}`;
-      }
-      if (pending.createdAt) {
-        const d = new Date(pending.createdAt);
-        d.setDate(d.getDate() + 1);
-        return d.toISOString().slice(0, 10);
-      }
-      return null;
-    })();
-
-    if (ct === null) {
-      // Not mentioned by manager → keep original
-      msgText = text;
-    } else if (newTaskTexts.length === 0) {
-      // Explicit empty section → "no tasks" message
-      const hdr = text.split('\n')[0]; // reuse "📋 משימות — יום X DD.M:" header line
-      msgText = `${hdr}\n\nאין משימות מחר ✅`;
-      if (effectiveDateISO) {
-        const { removedTasks } = updatePlanWithCorrectedTasks(displayName, [], effectiveDateISO, dateLabel);
-        if (auth && removedTasks.length)
-          await syncCorrectedTasksToCalendar(auth, displayName, removedTasks, [], effectiveDateISO);
-      }
-    } else {
-      // Correction with actual tasks
-      msgText = deduplicateLines(ct);
-      if (effectiveDateISO) {
-        const { removedTasks } = updatePlanWithCorrectedTasks(displayName, newTaskTexts, effectiveDateISO, dateLabel);
-        if (auth && removedTasks.length)
-          await syncCorrectedTasksToCalendar(auth, displayName, removedTasks, newTaskTexts, effectiveDateISO);
-      }
-    }
-
-    const ok = await sendWhatsAppMessage(sendKey, msgText, { pin });
-    const tag = ct === null ? 'מאושר' : (newTaskTexts.length === 0 ? 'ריק' : 'מתוקן');
-    log(`[ManagerApproval] ${tag} → "${displayName}" ${ok ? '✅' : '❌'}`);
+  for (const { sendKey, group, dateLabel, tasks: groupTasks } of byGroup.values()) {
+    const dayName = getHebrewDayName(pending.dateISO);
+    let msg = `📋 משימות — ${dayName} ${dateLabel}:\n\n`;
+    groupTasks.forEach(task => { msg += `• ${task.text}\n`; });
+    if (weather) msg += `\n${weatherEmoji(weather.code)} ${weather.maxTemp}°/${weather.minTemp}° • גשם: ${weather.precipitation}%`;
+    const ok = await sendWhatsAppMessage(sendKey, msg.trim(), { pin: config.pinMessages === true });
+    log(`[ManagerApproval] ${ok ? '✅' : '❌'} → "${group}"`);
     if (ok) sent++; else failed++;
   }
+
+  // Update weekly plan + sync calendar
+  await _updatePlanFromDraft(pending);
   savePendingApproval({ ...pending, status: 'sent', sentAt: new Date().toISOString() });
-  const dayName = pending.dayName || '';
-  notifyAdmin(`✅ תזכורות מחר (${dayName}) נשלחו — ${sent}/${pending.groupMessages.length} קבוצות${failed ? ` ❌ ${failed} נכשלו` : ''}`);
+  notifyAdmin(`✅ תזכורות (${pending.dayName}) נשלחו — ${sent}/${byGroup.size} קבוצות${failed ? ` ❌ ${failed} נכשלו` : ''}`);
   broadcast('managerApprovalExecuted', { sent, failed });
 }
 
-/** Pre-send job: builds draft, stores it, sends to manager phones for approval. */
+/** Replaces plan tasks for the approved date with the draft tasks, then syncs Google Calendar. */
+async function _updatePlanFromDraft(pending) {
+  const plan = getWeeklyPlan();
+  if (!plan) return;
+  const dateISO = pending.dateISO;
+
+  // Capture current plan tasks for this date (for calendar deletion)
+  const oldByGroup = {};
+  for (const task of plan.tasks || []) {
+    if (task.dateISO === dateISO) {
+      (oldByGroup[task.whatsappGroup] = oldByGroup[task.whatsappGroup] || []).push(task.taskText);
+    }
+  }
+
+  // Remove all existing tasks for this date, add new ones from draft
+  const kept = (plan.tasks || []).filter(task => task.dateISO !== dateISO);
+  const newTasks = pending.tasks.map(task => ({
+    taskText:        task.text,
+    whatsappGroup:   task.group,
+    whatsappGroupId: task.sendKey?.includes('@g.us') ? task.sendKey : undefined,
+    dateISO:         task.dateISO || dateISO,
+    dateLabel:       task.dateLabel || '',
+    fingerprint:     `${task.group}|${task.text}|${task.dateISO || dateISO}`,
+    willSend:        true,
+  }));
+
+  saveWeeklyPlan({
+    ...plan,
+    tasks: [...kept, ...newTasks].sort((a, b) => (a.dateISO || '') < (b.dateISO || '') ? -1 : 1),
+    savedAt: new Date().toISOString(),
+  });
+  broadcast('weeklyPlanUpdated', { dateISO, taskCount: newTasks.length });
+
+  // Calendar sync
+  if (!isGoogleAuthenticated()) return;
+  try {
+    const auth = await getAuthenticatedClient();
+    const calendarIds = await resolveCalendarIds(auth);
+    const newByGroup = {};
+    for (const task of pending.tasks) {
+      (newByGroup[task.group] = newByGroup[task.group] || []).push(task.text);
+    }
+    for (const groupName of new Set([...Object.keys(oldByGroup), ...Object.keys(newByGroup)])) {
+      const calId = await getOrCreateCalendar(auth, groupName, calendarIds);
+      if (!calId) continue;
+      for (const title of (oldByGroup[groupName] || [])) {
+        await deleteAllDayEvent(auth, calId, title, dateISO);
+      }
+      for (const title of (newByGroup[groupName] || [])) {
+        await createAllDayEvent(auth, calId, title, dateISO);
+      }
+    }
+  } catch (e) {
+    log('[ManagerApproval] Calendar sync error: ' + e.message);
+  }
+}
+
+/** Pre-send job: builds flat task list from plan, stores state machine pending, sends to managers. */
 async function managerApprovalPreSendJob() {
   const cfg = getConfig();
   if (!cfg.managerApprovalEnabled || !cfg.groupRemindersEnabled) return;
 
   log('[ManagerApproval] Building draft for approval...');
-  const built = await buildGroupReminderMessages();
-  if (!built) { log('[ManagerApproval] No tasks for tomorrow — skipping'); return; }
+  const plan = getWeeklyPlan();
+  if (!plan?.tasks?.length) { log('[ManagerApproval] No plan — skipping'); return; }
 
-  const { messages, dayName } = built;
-  const rh = String(cfg.groupRemindersHour ?? 7).padStart(2, '0');
-  const rm = String(cfg.groupRemindersMinute ?? 0).padStart(2, '0');
+  const tomorrow = getTomorrowISO();
+  const planTasks = plan.tasks.filter(task => task.dateISO === tomorrow && task.whatsappGroup);
+  if (!planTasks.length) { log('[ManagerApproval] No tasks for tomorrow — skipping'); return; }
 
-  savePendingApproval({
-    groupMessages: messages,
+  const tasks = planTasks.map((task, i) => ({
+    id:            generateId(),
+    displayNumber: i + 1,
+    group:         task.whatsappGroup,
+    sendKey:       task.whatsappGroupId || task.whatsappGroup,
+    text:          task.taskText,
+    dateISO:       tomorrow,
+    dateLabel:     task.dateLabel || '',
+  }));
+
+  const dayName = getHebrewDayName(tomorrow);
+  const pending = {
+    status:          'pending',
+    state:           'draft_review',
+    tasks,
     dayName,
-    createdAt: new Date().toISOString(),
-    status: 'pending',
-  });
+    dateISO:         tomorrow,
+    selectedTaskId:  null,
+    selectedGroup:   null,
+    selectedSendKey: null,
+    pin:             cfg.pinMessages === true,
+    createdAt:       new Date().toISOString(),
+  };
 
-  await sendApprovalRequestToManagers(messages, dayName, `${rh}:${rm}`);
+  savePendingApproval(pending);
+
+  const phones = cfg.managerApprovalPhones || [];
+  for (const phone of phones) {
+    await dispatchDraft(phone, pending, false);
+  }
+  log(`[ManagerApproval] Draft sent — ${tasks.length} tasks to ${phones.length} manager(s)`);
 }
 
 // ─── Daily tomorrow-tasks reminder per WhatsApp group ────────────────────────
@@ -713,15 +772,20 @@ async function sendTomorrowTasksToGroups() {
       log('[TomorrowGroups] Already sent via manager approval — skipping');
       return;
     }
-    if (pending?.status === 'pending') {
-      log('[TomorrowGroups] Manager approval still pending — skipping scheduled send (waiting for reply)');
+    if (pending?.status === 'approved' && pending?.tasks) {
+      log('[TomorrowGroups] Approved early — sending now');
+      await finalizeApproval(pending);
+      return;
+    }
+    if (pending?.status === 'pending' && pending?.tasks) {
+      log('[TomorrowGroups] Manager approval still pending — nudging manager with draft');
       const phones = config.managerApprovalPhones || [];
       for (const phone of phones) {
-        await sendWhatsAppMessage(phone, `⏰ שעת שליחת התזכורת הגיעה — ממתין לאישורך.\nהשב *אישור* לשליחה, *ביטול* לביטול, או שלח טקסט מתוקן.`);
+        await dispatchDraft(phone, pending);
       }
       return;
     }
-    // No pending record → pre-send didn't run (e.g. just enabled) — fall through to normal send
+    // No pending, cancelled, or old-format record → fall through to normal send
   }
 
   const plan = getWeeklyPlan();
@@ -1774,41 +1838,10 @@ app.get('*', (req, res) => {
 // ─── Manager approval — reply listener ───────────────────────────────────────
 whatsappEvents.on('managerDirectMessage', async ({ body, senderPhone }) => {
   const pending = getPendingApproval();
-  if (!pending) return;
-
-  const trimmed = body.trim();
-
-  // Allow Format-2 corrections ("GROUP: text") even after the approval was already sent
-  if (pending.status === 'sent') {
-    const isGroupCorrection = (pending.groupMessages || []).some(g => trimmed.startsWith(g.displayName + ':'));
-    if (isGroupCorrection) {
-      log(`[ManagerApproval] Post-send correction from ${senderPhone} — reopening and applying`);
-      savePendingApproval({ ...pending, status: 'pending' });
-      await executePendingApproval(trimmed);
-    } else {
-      log(`[ManagerApproval] Post-send message from ${senderPhone} ignored (use [שם קבוצה]: [משימות] to correct)`);
-    }
-    return;
-  }
-
-  if (pending.status !== 'pending') return;
-
-  const isApproval = /^(אישור|אשר|ok|כן|approve)$/i.test(trimmed);
-  const isCancel   = /^(ביטול|בטל|לא|no|cancel)$/i.test(trimmed);
-
-  if (isCancel) {
-    savePendingApproval({ ...pending, status: 'cancelled' });
-    notifyAdmin(`❌ תזכורת מחר (${pending.dayName}) בוטלה על ידי ${senderPhone}`);
-    log(`[ManagerApproval] Cancelled by ${senderPhone}`);
-    return;
-  }
-  if (isApproval) {
-    log(`[ManagerApproval] Approved by ${senderPhone}`);
-    await executePendingApproval();
-  } else {
-    log(`[ManagerApproval] Corrections received from ${senderPhone} — sending corrected version`);
-    await executePendingApproval(trimmed);
-  }
+  // Only handle new state-machine format (has tasks array)
+  if (!pending || !pending.tasks) return;
+  if (pending.status === 'sent' || pending.status === 'cancelled') return;
+  await handleApprovalMessage(body, pending, senderPhone);
 });
 
 // ─── Auto Excel listener ──────────────────────────────────────────────────────

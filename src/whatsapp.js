@@ -421,3 +421,53 @@ export async function sendWhatsAppMessage(recipient, text, options = {}) {
     return false;
   }
 }
+
+/**
+ * Sends a WhatsApp message with interactive buttons (max 3).
+ * Falls back to plain text + footer if buttons are not supported.
+ * @param {string} recipient - phone number, group name, or chat ID
+ * @param {string} bodyText  - message body
+ * @param {Array<{id:string,body:string}>} buttons - up to 3 buttons
+ * @param {string} footerText - numeric fallback hint shown as plain-text footer
+ */
+export async function sendWhatsAppButtons(recipient, bodyText, buttons, footerText = '') {
+  if (!isReady || !client) {
+    log('Cannot send buttons — not connected');
+    return false;
+  }
+  // Resolve chatId (same logic as sendWhatsAppMessage)
+  let chatId;
+  if (recipient.includes('@')) {
+    chatId = recipient.trim();
+  } else {
+    const cachedId = groupIdCache[recipient.trim()];
+    if (cachedId) {
+      chatId = cachedId;
+    } else {
+      const bare = recipient.replace(/^\+/, '').replace(/\D/g, '');
+      try {
+        const numberId = await client.getNumberId(bare);
+        chatId = numberId ? numberId._serialized : `${bare}@c.us`;
+      } catch (_) {
+        chatId = `${bare}@c.us`;
+      }
+    }
+  }
+  try {
+    const { Buttons } = pkg;
+    if (!Buttons) throw new Error('Buttons class not available in whatsapp-web.js');
+    const btns = new Buttons(
+      bodyText,
+      buttons.map(b => ({ body: b.body, id: b.id })),
+      null,
+      footerText || undefined
+    );
+    await client.sendMessage(chatId, btns);
+    log(`Buttons sent to ${recipient}`);
+    return true;
+  } catch (err) {
+    log(`Buttons failed (${err.message}) — falling back to plain text`);
+    const fallback = footerText ? `${bodyText}\n\n${footerText}` : bodyText;
+    return sendWhatsAppMessage(recipient, fallback);
+  }
+}
