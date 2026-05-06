@@ -1198,6 +1198,19 @@
         </div>
       </div>
 
+      <!-- Trigger words -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:.84rem;font-weight:600;margin-bottom:4px">מילות טריגר לפרה-פילטר</div>
+        <div style="font-size:.76rem;color:var(--muted);margin-bottom:10px">הודעה שמכילה לפחות מילה אחת מהרשימה תועבר לזיהוי AI. הוסף מילים ספציפיות לענף שלך.</div>
+        <div id="trigger-words-list" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px"></div>
+        <div class="add-group-row" style="max-width:280px">
+          <input type="text" id="trigger-word-input" placeholder="מילה חדשה" dir="rtl"
+            style="flex:1;font-size:.84rem"
+            onkeydown="if(event.key==='Enter')addTriggerWord()">
+          <button class="btn btn-teal" style="font-size:.82rem;padding:5px 12px" onclick="addTriggerWord()">הוסף</button>
+        </div>
+      </div>
+
       <!-- Sliders -->
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--border);padding-top:14px">
         <div class="settings-group" style="max-width:180px">
@@ -2245,6 +2258,7 @@ function markSettingsDirty() {}
 
 // ── Task Detection — authorized admins ────────────────────────────────────────
 let taskAdmins = [];
+let triggerWords = [];
 let autoExcelAdmins = [];
 let managerApprovalPhones = [];
 
@@ -2273,6 +2287,34 @@ function addTaskAdmin() {
 function removeTaskAdmin(phone) {
   taskAdmins = taskAdmins.filter(p => p !== phone);
   renderTaskAdmins();
+  markSettingsDirty();
+}
+
+function renderTriggerWords() {
+  const container = document.getElementById('trigger-words-list');
+  if (!container) return;
+  if (!triggerWords.length) {
+    container.innerHTML = '<span style="font-size:.76rem;color:var(--muted);font-style:italic">אין מילות טריגר — כל הודעה תישלח לזיהוי AI</span>';
+    return;
+  }
+  container.innerHTML = triggerWords.map(w => `
+    <span style="display:inline-flex;align-items:center;gap:4px;background:var(--teal-light);color:var(--teal);border-radius:20px;padding:3px 10px;font-size:.8rem;font-weight:600">
+      ${esc(w)}
+      <button onclick="removeTriggerWord(${JSON.stringify(w)})" style="background:none;border:none;cursor:pointer;color:var(--teal);font-size:.9rem;padding:0;line-height:1">&times;</button>
+    </span>`).join('');
+}
+
+function addTriggerWord() {
+  const input = document.getElementById('trigger-word-input');
+  const word = input.value.trim();
+  if (!word) return;
+  if (!triggerWords.includes(word)) { triggerWords.push(word); renderTriggerWords(); markSettingsDirty(); }
+  input.value = '';
+}
+
+function removeTriggerWord(word) {
+  triggerWords = triggerWords.filter(w => w !== word);
+  renderTriggerWords();
   markSettingsDirty();
 }
 
@@ -2502,10 +2544,11 @@ async function parseExcelFile() {
   }
 }
 
-async function savePlanToServer(weekLabel, tasks) {
+async function savePlanToServer(weekLabel, tasks, { noCarryover = false } = {}) {
   try {
     const toSave = tasks.filter(t => t.whatsappGroup); // for daily reminder
-    await fetch(`${API_BASE}/excel/save-plan`, {
+    const url = noCarryover ? `${API_BASE}/excel/save-plan?noCarryover=1` : `${API_BASE}/excel/save-plan`;
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ weekLabel, tasks: toSave, allTasks: tasks }) // allTasks for UI restore
@@ -2878,7 +2921,7 @@ async function saveTaskFromModal() {
   closeTaskEditModal();
 
   const weekLabel = document.getElementById('excel-week-label')?.textContent?.trim() || '';
-  await savePlanToServer(weekLabel, excelParsedTasks);
+  await savePlanToServer(weekLabel, excelParsedTasks, { noCarryover: true });
   populateFilters(excelParsedTasks);
   renderExcelPreview(excelParsedTasks);
 
@@ -2924,7 +2967,7 @@ async function deleteTask(idx) {
   if (!confirm(`למחוק את המשימה:\n"${t.taskText}" — ${t.dateLabel}?`)) return;
   excelParsedTasks.splice(idx, 1);
   const weekLabel = document.getElementById('excel-week-label')?.textContent?.trim() || '';
-  await savePlanToServer(weekLabel, excelParsedTasks);
+  await savePlanToServer(weekLabel, excelParsedTasks, { noCarryover: true });
   populateFilters(excelParsedTasks);
   renderExcelPreview(excelParsedTasks);
   toast('משימה נמחקה', 'success');
@@ -3411,6 +3454,8 @@ async function loadSettings() {
     document.getElementById('task-conf-val').textContent = confPct + '%';
     taskAdmins = cfg.taskDetectionAdmins || [];
     renderTaskAdmins();
+    triggerWords = cfg.taskDetectionTriggerWords || [];
+    renderTriggerWords();
     // Auto Excel
     const aeEnabled = cfg.autoExcelEnabled ?? false;
     document.getElementById('auto-excel-enabled').checked = aeEnabled;
@@ -3464,6 +3509,7 @@ async function saveSettings() {
     taskDetectionDelay:         parseInt(document.getElementById('task-detection-delay').value, 10),
     taskDetectionMinConfidence: parseInt(document.getElementById('task-detection-confidence').value, 10) / 100,
     taskDetectionAdmins:        taskAdmins,
+    taskDetectionTriggerWords:  triggerWords,
     autoExcelEnabled:         document.getElementById('auto-excel-enabled').checked,
     autoExcelGroup:           document.getElementById('auto-excel-group').value,
     autoExcelRequireApproval: document.getElementById('auto-excel-require-approval').checked,
@@ -3620,7 +3666,7 @@ async function bulkDeleteSelected() {
     if (excelParsedTasks[idx]) excelParsedTasks.splice(idx, 1);
   }
   const weekLabel = document.getElementById('excel-week-label')?.textContent?.trim() || '';
-  await savePlanToServer(weekLabel, excelParsedTasks);
+  await savePlanToServer(weekLabel, excelParsedTasks, { noCarryover: true });
   populateFilters(excelParsedTasks);
   renderExcelPreview(excelParsedTasks);
   toast(`${indices.length} משימות נמחקו`, 'success');

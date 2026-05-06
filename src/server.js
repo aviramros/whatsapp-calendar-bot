@@ -1139,6 +1139,7 @@ app.post('/config', (req, res) => {
     taskDetectionDelay:         req.body.taskDetectionDelay         !== undefined ? Number(req.body.taskDetectionDelay)             : (current.taskDetectionDelay         ?? 5),
     taskDetectionMinConfidence: req.body.taskDetectionMinConfidence !== undefined ? Number(req.body.taskDetectionMinConfidence)      : (current.taskDetectionMinConfidence  ?? 0.75),
     taskDetectionAdmins:        Array.isArray(req.body.taskDetectionAdmins)       ? req.body.taskDetectionAdmins                    : (current.taskDetectionAdmins        ?? []),
+    taskDetectionTriggerWords:  Array.isArray(req.body.taskDetectionTriggerWords)  ? req.body.taskDetectionTriggerWords               : (current.taskDetectionTriggerWords   ?? []),
   };
   saveConfig(updated);
 
@@ -1322,7 +1323,9 @@ app.post('/excel/save-plan', (req, res) => {
   let finalTasks    = tasks;
   let finalAllTasks = Array.isArray(allTasks) ? allTasks : tasks;
 
-  if (existing?.tasks?.length) {
+  // noCarryover=1 skips re-adding existing tasks — used for manual edits/deletions
+  // so that explicitly deleted tasks are not resurrected from the existing plan.
+  if (!req.query.noCarryover && existing?.tasks?.length) {
     const newFPs = new Set(tasks.map(t => t.fingerprint).filter(Boolean));
     const carryover = existing.tasks.filter(t =>
       t.dateISO >= todayISO && !newFPs.has(t.fingerprint)

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { whatsappEvents } from './whatsapp.js';
+import { getConfig } from './config.js';
 
 // ── Lazy Anthropic client ────────────────────────────────────────────────────
 let _client = null;
@@ -19,7 +20,11 @@ function log(msg) {
 
 // ── Pre-filter (cheap, no API call) ─────────────────────────────────────────
 const TIME_WORDS = [
-  'מחר', 'היום', 'יום א', 'יום ב', 'יום ג', 'יום ד', 'יום ה', 'יום ו', 'יום ש',
+  'מחר', 'היום',
+  // abbreviated day names
+  'יום א', 'יום ב', 'יום ג', 'יום ד', 'יום ה', 'יום ו', 'יום ש',
+  // full day names
+  'יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת',
   'שבוע הבא', 'בוקר', 'צהריים', 'ערב', 'לילה',
   'ריסוס', 'ריסס', 'להשקות', 'השקיה', 'להשקיה',
   'דישון', 'לדשן', 'קטיף', 'לקטוף', 'גיזום', 'לגזום',
@@ -28,7 +33,8 @@ const TIME_WORDS = [
 
 export function mightBeTask(text) {
   if (!text || text.trim().length < 6) return false;
-  const matched = TIME_WORDS.find(w => text.includes(w));
+  const words = getConfig().taskDetectionTriggerWords || TIME_WORDS;
+  const matched = words.find(w => text.includes(w));
   if (!matched) log(`Pre-filter: no trigger word found in "${text.slice(0,60)}"`);
   return !!matched;
 }

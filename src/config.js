@@ -51,6 +51,15 @@ const DEFAULTS = {
   taskDetectionDelay: 5,            // minutes before sending follow-up
   taskDetectionMinConfidence: 0.75, // 0–1
   taskDetectionAdmins: [],          // authorized sender phone numbers (empty = all)
+  taskDetectionTriggerWords: [
+    'מחר', 'היום',
+    'יום א', 'יום ב', 'יום ג', 'יום ד', 'יום ה', 'יום ו', 'יום ש',
+    'יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת',
+    'שבוע הבא', 'בוקר', 'צהריים', 'ערב', 'לילה',
+    'ריסוס', 'ריסס', 'להשקות', 'השקיה', 'להשקיה',
+    'דישון', 'לדשן', 'קטיף', 'לקטוף', 'גיזום', 'לגזום',
+    'תוספת', 'הוסיפו', 'להוסיף', 'נוסף', 'עבודה', 'לעבוד',
+  ],
   // Maps each WhatsApp group name to its Google Calendar ID (Service Account approach)
   calendarMap: {
     'השקיה':       'cfbea46a5e114990d973b6c11fb2a40b2fc38c4fc6fcdaef40ca80fac57f86da@group.calendar.google.com',
