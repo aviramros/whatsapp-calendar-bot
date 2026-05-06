@@ -394,6 +394,11 @@ function generateId() {
 }
 
 function reassignDisplayNumbers(tasks) {
+  // Sort by group first (preserving original group order) so same-group tasks are always contiguous
+  const groupOrder = [];
+  const seen = new Set();
+  for (const t of tasks) { if (!seen.has(t.group)) { groupOrder.push(t.group); seen.add(t.group); } }
+  tasks.sort((a, b) => groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group));
   tasks.forEach((t, i) => { t.displayNumber = i + 1; });
 }
 
@@ -401,12 +406,13 @@ function formatDraftText(tasks, dayName, dateLabel, isUpdate = false) {
   const hdr = isUpdate
     ? 'טיוטה מעודכנת:'
     : `טיוטת משימות מחר — ${dayName} ${dateLabel}:`;
-  // Group tasks visually — blank line between different groups, bold group header
+  // Tasks arrive pre-sorted by group (sortAndRenumber guarantees this).
+  // Just iterate and print — group header whenever group changes.
   const lines = [];
   let lastGroup = null;
   for (const t of tasks) {
     if (t.group !== lastGroup) {
-      if (lastGroup !== null) lines.push(''); // blank separator
+      if (lastGroup !== null) lines.push('');
       lines.push(`*${t.group}*`);
       lastGroup = t.group;
     }
@@ -739,15 +745,16 @@ async function managerApprovalPreSendJob() {
   const planTasks = plan.tasks.filter(task => task.dateISO === tomorrow && task.whatsappGroup);
   if (!planTasks.length) { log('[ManagerApproval] No tasks for tomorrow — skipping'); return; }
 
-  const tasks = planTasks.map((task, i) => ({
+  const tasks = planTasks.map(task => ({
     id:            generateId(),
-    displayNumber: i + 1,
+    displayNumber: 0, // will be set by reassignDisplayNumbers
     group:         task.whatsappGroup,
     sendKey:       task.whatsappGroupId || task.whatsappGroup,
     text:          task.taskText,
     dateISO:       tomorrow,
     dateLabel:     task.dateLabel || '',
   }));
+  reassignDisplayNumbers(tasks); // sorts by group + assigns 1,2,3...
 
   const dayName = getHebrewDayName(tomorrow);
   const pending = {
